@@ -1,0 +1,147 @@
+@import "tailwindcss";
+@plugin "daisyui";
+@import "highlight.js/styles/github-dark.css";
+
+/* Code block wrapper with copy button */
+.code-block-wrapper {
+  position: relative;
+  margin: 0.5rem 0;
+}
+
+.code-block-wrapper pre {
+  border-radius: 0.5rem;
+  border: 1px solid oklch(var(--bc) / 0.1);
+  padding: 1rem;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.code-block-wrapper .copy-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  border-radius: 0.25rem;
+  background: oklch(var(--b3));
+  color: oklch(var(--bc) / 0.7);
+  border: 1px solid oklch(var(--bc) / 0.15);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 1;
+}
+
+.code-block-wrapper:hover .copy-btn {
+  opacity: 1;
+}
+
+.copy-btn:hover {
+  background: oklch(var(--b2));
+  color: oklch(var(--bc));
+}
+
+/* Ensure text is selectable in chat content */
+.chat-bubble,
+.chat-bubble *,
+.assistant-content,
+.assistant-content *,
+.collapse-content,
+.collapse-content * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Ensure chat bubbles can hold wide code blocks */
+.chat-bubble pre {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.chat-bubble code {
+  font-size: 0.8em;
+}
+
+/* Assistant message card style */
+.assistant-message {
+  padding: 0.25rem 0;
+}
+
+.assistant-content {
+  line-height: 1.7;
+  color: oklch(var(--bc) / 0.9);
+}
+
+.assistant-content p {
+  margin-bottom: 0.75em;
+}
+
+.assistant-content p:last-child {
+  margin-bottom: 0;
+}
+
+.assistant-content ul,
+.assistant-content ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.assistant-content li {
+  margin-bottom: 0.25em;
+}
+
+.assistant-content strong {
+  color: oklch(var(--bc));
+  font-weight: 600;
+}
+
+.assistant-content code:not(pre code),
+.chat-bubble code:not(pre code) {
+  background: #2d3748;
+  border: 1px solid #4a5568;
+  border-radius: 0.3rem;
+  padding: 0.15em 0.45em;
+  font-size: 0.85em;
+  color: #e2b714;
+}
+
+/* Tighter message spacing */
+.chat + .chat,
+.chat + .assistant-message,
+.assistant-message + .chat,
+.assistant-message + .assistant-message {
+  margin-top: 0.5rem;
+}
+
+/* Tool block copy button */
+.tool-pre-wrapper {
+  position: relative;
+}
+
+.tool-pre-wrapper .copy-btn {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.65rem;
+  border-radius: 0.25rem;
+  background: oklch(var(--b2));
+  color: oklch(var(--bc) / 0.6);
+  border: 1px solid oklch(var(--bc) / 0.1);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.tool-pre-wrapper:hover .copy-btn {
+  opacity: 1;
+}
+
+/* Tab bar drag handle */
+.tab-bar {
+  -webkit-app-region: drag;
+}
+.tab-bar button,
+.tab-bar .tab-item {
+  -webkit-app-region: no-drag;
+}
