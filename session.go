@@ -9,8 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"sync"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"syscall"
+	"time"
 )
 
 type ClaudeSession struct {
@@ -109,6 +109,7 @@ func (a *App) spawnClaude(tabID, workDir, sessionID, prompt, profileID, model st
 	log.Printf("[claude spawn %s] args: %v", tabID, args)
 
 	cmd := exec.CommandContext(ctx, "claude", args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Dir = workDir
 
 	// Apply profile env vars if a profile is set
@@ -181,7 +182,7 @@ func (a *App) spawnClaude(tabID, workDir, sessionID, prompt, profileID, model st
 				}
 			}
 
-			runtime.EventsEmit(a.ctx, "session:event", tabID, line)
+			a.safeEmit("session:event", tabID, line)
 		}
 
 		if err := scanner.Err(); err != nil {
@@ -197,7 +198,7 @@ func (a *App) spawnClaude(tabID, workDir, sessionID, prompt, profileID, model st
 			}
 		}
 
-		runtime.EventsEmit(a.ctx, "session:done", tabID, exitCode)
+		a.safeEmit("session:done", tabID, exitCode)
 	}()
 
 	return nil
@@ -220,8 +221,20 @@ func (a *App) SessionStop(tabID string) error {
 }
 
 func (a *App) stopSession(session *ClaudeSession) {
+	// Cancel the context — sends SIGKILL via exec.CommandContext
 	session.cancel()
-	<-session.done
+
+	// If the process is still alive, kill the entire process group
+	if session.cmd != nil && session.cmd.Process != nil {
+		_ = syscall.Kill(-session.cmd.Process.Pid, syscall.SIGKILL)
+	}
+
+	// Wait with a timeout so shutdown never blocks forever
+	select {
+	case <-session.done:
+	case <-time.After(3 * time.Second):
+		log.Printf("session %s: timed out waiting for process to exit", session.TabID)
+	}
 
 	a.sessMu.Lock()
 	if s, ok := a.sessions[session.TabID]; ok && s == session {

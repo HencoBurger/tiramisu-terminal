@@ -46,6 +46,8 @@ type App struct {
 	termMu     sync.RWMutex
 	config     AppConfig
 	configPath string
+	closing    bool
+	closingMu  sync.RWMutex
 }
 
 func NewApp() *App {
@@ -60,7 +62,20 @@ func (a *App) startup(ctx context.Context) {
 	a.loadConfig()
 }
 
+func (a *App) safeEmit(eventName string, data ...interface{}) {
+	a.closingMu.RLock()
+	defer a.closingMu.RUnlock()
+	if a.closing {
+		return
+	}
+	runtime.EventsEmit(a.ctx, eventName, data...)
+}
+
 func (a *App) shutdown(ctx context.Context) {
+	a.closingMu.Lock()
+	a.closing = true
+	a.closingMu.Unlock()
+
 	a.sessMu.Lock()
 	sessions := make([]*ClaudeSession, 0, len(a.sessions))
 	for _, s := range a.sessions {

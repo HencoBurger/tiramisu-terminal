@@ -6,9 +6,9 @@ import (
 	"io"
 	"log"
 	"os"
+	"time"
 
 	"github.com/aymanbagabas/go-pty"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // PTYSession holds a single terminal session.
@@ -44,6 +44,7 @@ func (a *App) TerminalStart(sessionID string, cols, rows int, workDir string) er
 	}
 
 	cmd := p.Command(shell)
+	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 	if workDir != "" {
 		cmd.Dir = workDir
 	}
@@ -115,8 +116,26 @@ func (a *App) TerminalStop(sessionID string) error {
 }
 
 func (a *App) closePTY(session *PTYSession) error {
+	// Kill the shell process explicitly — pty.Close() only sends SIGHUP
+	// which the shell may ignore.
+	if session.cmd != nil && session.cmd.Process != nil {
+		_ = session.cmd.Process.Kill()
+	}
+
 	err := session.pty.Close()
-	<-session.done
+
+	// Wait for the reader goroutine with a timeout
+	select {
+	case <-session.done:
+	case <-time.After(3 * time.Second):
+		log.Printf("terminal %s: timed out waiting for reader goroutine", session.id)
+	}
+
+	// Reap the process to avoid zombies
+	if session.cmd != nil {
+		_ = session.cmd.Wait()
+	}
+
 	return err
 }
 
@@ -129,7 +148,7 @@ func (a *App) readTerminalOutput(session *PTYSession) {
 		n, err := session.pty.Read(buf)
 		if n > 0 {
 			encoded := base64.StdEncoding.EncodeToString(buf[:n])
-			runtime.EventsEmit(a.ctx, "terminal:output", session.id, encoded)
+			a.safeEmit("terminal:output", session.id, encoded)
 		}
 		if err != nil {
 			if err != io.EOF {
