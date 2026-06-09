@@ -1,0 +1,31 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+terinasu
+tiramisu
+
+# Build output
+build/bin/
+
+# Logs
+*.log
+
+# Dependencies
+frontend/node_modules/
+
+# Wails
+frontend/dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+webkit2gtk-4.1.pc
