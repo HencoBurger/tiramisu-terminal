@@ -32,7 +32,7 @@ const props = defineProps<{
 }>()
 
 const { activeTabId, setTabWorkDir, setTabActivity } = useTabs()
-const { effectiveConfig } = useConfig()
+const { effectiveConfig, maybeSetDefaultWorkDir } = useConfig()
 const { play } = useSound()
 
 const containerRef = ref<HTMLElement>()
@@ -102,17 +102,26 @@ function startTerminal() {
 
     // Ctrl+Shift+C → copy
     if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+      e.preventDefault()
       copySelection()
       return false
     }
     // Ctrl+Shift+V → paste
     if (e.ctrlKey && e.shiftKey && e.key === 'V') {
+      e.preventDefault()
       pasteClipboard()
       return false
     }
     // Ctrl+C with selection → copy instead of SIGINT
     if (e.ctrlKey && !e.shiftKey && e.key === 'c' && terminal?.hasSelection()) {
+      e.preventDefault()
       copySelection()
+      return false
+    }
+    // Ctrl+V → paste
+    if (e.ctrlKey && !e.shiftKey && e.key === 'v') {
+      e.preventDefault()
+      pasteClipboard()
       return false
     }
 
@@ -141,6 +150,10 @@ function pasteClipboard() {
     if (text) {
       const encoded = btoa(text)
       TerminalInput(props.tab.id, encoded).catch(() => {})
+    } else {
+      // No text in clipboard (e.g. an image) — forward a literal Ctrl+V so the
+      // running program can read the clipboard itself (Claude Code image paste)
+      TerminalInput(props.tab.id, btoa('\x16')).catch(() => {})
     }
   }).catch(() => {})
 }
@@ -185,6 +198,7 @@ function resetIdleTimer() {
 
 function handleWorkDirSelected(dir: string) {
   setTabWorkDir(props.tab.id, dir)
+  maybeSetDefaultWorkDir(dir)
 }
 
 watch(() => props.tab.workDir, (newDir) => {

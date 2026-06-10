@@ -6,7 +6,7 @@
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev -- --port 5173 --strictPort",
   "frontend:dev:serverUrl": "http://localhost:5173",
-  "wailsjsdir": "./frontend/wailsjs",
+  "wailsjsdir": "./frontend",
   "tags": "webkit2_41",
   "author": {
     "name": "Henco Burger",

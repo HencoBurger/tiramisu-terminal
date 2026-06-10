@@ -17,7 +17,7 @@ const props = defineProps<{
 
 const { startSession, sendMessage, resumeSession, stopSession } = useSession()
 const { addMessage, setTabStatus, setTabWorkDir, setTabProfile, setTabPlanMode, setTabModel, autoNameTab, renameTab } = useTabs()
-const { effectiveConfig } = useConfig()
+const { effectiveConfig, maybeSetDefaultWorkDir } = useConfig()
 
 const profiles = computed(() => effectiveConfig.value.profiles || [])
 
@@ -131,6 +131,7 @@ async function handleSend(text: string) {
 
 function handleWorkDirSelect(dir: string) {
   setTabWorkDir(props.tab.id, dir)
+  maybeSetDefaultWorkDir(dir)
   error.value = ''
 
   // Retry the pending message with the new directory

@@ -5,6 +5,7 @@ import type { TabState } from '../types/session'
 const props = defineProps<{
   tab: TabState
   isActive: boolean
+  isDragging?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -12,7 +13,13 @@ const emit = defineEmits<{
   close: []
   rename: [name: string]
   contextmenu: [event: MouseEvent]
+  dragstart: [event: PointerEvent]
 }>()
+
+function handlePointerDown(e: PointerEvent) {
+  if ((e.target as HTMLElement).closest('button, input')) return
+  emit('dragstart', e)
+}
 
 const isRenaming = ref(false)
 const renameInput = ref('')
@@ -57,10 +64,15 @@ function finishRename() {
 <template>
   <div
     class="tab-item flex items-center gap-1 px-3 py-1.5 cursor-pointer select-none rounded-t-lg text-sm border-b-2 min-w-0 max-w-48"
-    :class="isActive ? 'bg-base-100 border-primary text-base-content' : 'bg-base-300 border-transparent text-base-content/60 hover:text-base-content/80'"
+    :class="[
+      isActive ? 'bg-base-100 border-primary text-base-content' : 'bg-base-300 border-transparent text-base-content/60 hover:text-base-content/80',
+      isDragging ? 'opacity-70 relative z-10' : '',
+    ]"
+    style="--wails-draggable: no-drag"
     @click="emit('select')"
     @dblclick="startRename"
     @contextmenu.prevent="emit('contextmenu', $event)"
+    @pointerdown="handlePointerDown"
   >
     <span v-if="tab.type === 'terminal'" class="text-xs opacity-60 font-mono">&gt;_</span>
     <span v-if="tab.activity" class="inline-block w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />

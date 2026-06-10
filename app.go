@@ -55,6 +55,7 @@ type WindowSession struct {
 	ID               string      `json:"id"`
 	Name             string      `json:"name"`
 	Tabs             []TabConfig `json:"tabs"`
+	DefaultWorkDir   string      `json:"defaultWorkDir,omitempty"`
 	ThemeOverride    string      `json:"themeOverride,omitempty"`
 	SoundOverride    string      `json:"soundOverride,omitempty"`
 	PermModeOverride string      `json:"permModeOverride,omitempty"`

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { EventsOn, EventsOff } from '../wailsjs/runtime/runtime'
 import {
   LoadSessionHistory,
@@ -21,6 +21,7 @@ import SessionBrowser from './components/SessionBrowser.vue'
 import SessionPicker from './components/SessionPicker.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import DebugDrawer from './components/DebugDrawer.vue'
+import ConfirmDialog from './components/ConfirmDialog.vue'
 
 const {
   tabs,
@@ -56,6 +57,36 @@ const showSettings = ref(false)
 const showDebug = ref(false)
 const debugLogs = ref<string[]>([])
 const contextMenu = ref<{ tabId: string; x: number; y: number } | null>(null)
+
+// Close-tab confirmation
+const pendingClose = ref<{ tabIds: string[]; activateAfter?: string } | null>(null)
+
+const closeMessage = computed(() => {
+  if (!pendingClose.value) return ''
+  const { tabIds } = pendingClose.value
+  if (tabIds.length === 1) {
+    const tab = getTab(tabIds[0])
+    return `Close tab "${tab?.name || 'Untitled'}"?`
+  }
+  return `Close ${tabIds.length} tabs?`
+})
+
+function requestCloseTabs(tabIds: string[], activateAfter?: string) {
+  if (tabIds.length === 0) return
+  pendingClose.value = { tabIds, activateAfter }
+}
+
+function confirmClose() {
+  if (!pendingClose.value) return
+  const { tabIds, activateAfter } = pendingClose.value
+  for (const id of tabIds) {
+    const tab = getTab(id)
+    if (tab?.type === 'terminal') TerminalStop(id).catch(() => {})
+    removeTab(id)
+  }
+  if (activateAfter) setActiveTab(activateAfter)
+  pendingClose.value = null
+}
 
 // Session name inline editing
 const isRenamingSession = ref(false)
@@ -158,6 +189,9 @@ async function handleSessionSelect(id: string) {
 }
 
 function handleKeydown(e: KeyboardEvent) {
+  // Confirm dialog handles its own keys
+  if (pendingClose.value) return
+
   // Close context menu on any key
   if (contextMenu.value) {
     contextMenu.value = null
@@ -172,10 +206,7 @@ function handleKeydown(e: KeyboardEvent) {
       case 'w':
         e.preventDefault()
         if (activeTab.value) {
-          if (activeTab.value.type === 'terminal') {
-            TerminalStop(activeTab.value.id).catch(() => {})
-          }
-          removeTab(activeTab.value.id)
+          requestCloseTabs([activeTab.value.id])
         }
         break
       case 'd':
@@ -228,18 +259,12 @@ function handleContextMenuAction(action: string) {
       break
     }
     case 'close': {
-      const tab = getTab(tabId)
-      if (tab?.type === 'terminal') TerminalStop(tabId).catch(() => {})
-      removeTab(tabId)
+      requestCloseTabs([tabId])
       break
     }
     case 'closeOthers': {
-      const others = tabs.value.filter(t => t.id !== tabId)
-      others.forEach(t => {
-        if (t.type === 'terminal') TerminalStop(t.id).catch(() => {})
-        removeTab(t.id)
-      })
-      setActiveTab(tabId)
+      const others = tabs.value.filter(t => t.id !== tabId).map(t => t.id)
+      requestCloseTabs(others, tabId)
       break
     }
   }
@@ -327,7 +352,7 @@ function handleResumeSession(session: StoredSession) {
             :title="'Click to rename session'"
           >{{ windowSession?.name || 'Untitled' }}</span>
         </div>
-        <TabBar class="flex-1" @tab-context-menu="handleTabContextMenu" />
+        <TabBar class="flex-1" @tab-context-menu="handleTabContextMenu" @tab-close="(id: string) => requestCloseTabs([id])" />
       </div>
 
       <!-- Main content area: chat + debug side by side -->
@@ -416,6 +441,15 @@ function handleResumeSession(session: StoredSession) {
     <SettingsPanel
       :open="showSettings"
       @update:open="showSettings = $event"
+    />
+    <ConfirmDialog
+      :open="!!pendingClose"
+      title="Close tab"
+      :message="closeMessage"
+      confirm-label="Close"
+      danger
+      @confirm="confirmClose"
+      @cancel="pendingClose = null"
     />
   </div>
 </template>

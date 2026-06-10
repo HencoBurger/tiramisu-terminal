@@ -116,6 +116,7 @@ export interface WindowSession {
   id: string
   name: string
   tabs: TabConfig[]
+  defaultWorkDir?: string
   themeOverride?: string
   soundOverride?: string
   permModeOverride?: string

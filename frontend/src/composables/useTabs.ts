@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { useConfig } from './useConfig'
 import type { TabState, ChatMessage, SessionStatus, TabConfig, TabType } from '../types/session'
 
 const tabs = ref<TabState[]>([])
@@ -24,7 +25,7 @@ export function useTabs() {
     const tab: TabState = {
       id,
       name: name || `Tab ${tabs.value.length + 1}`,
-      workDir,
+      workDir: workDir || useConfig().windowSession.value?.defaultWorkDir || '',
       sessionId: '',
       status: 'idle',
       messages: [],
@@ -59,6 +60,13 @@ export function useTabs() {
 
   function setActiveTab(id: string) {
     activeTabId.value = id
+  }
+
+  function moveTab(id: string, toIndex: number) {
+    const from = tabs.value.findIndex(t => t.id === id)
+    if (from === -1 || toIndex < 0 || toIndex >= tabs.value.length || from === toIndex) return
+    const [tab] = tabs.value.splice(from, 1)
+    tabs.value.splice(toIndex, 0, tab)
   }
 
   function renameTab(id: string, name: string) {
@@ -185,6 +193,7 @@ export function useTabs() {
     addTab,
     removeTab,
     setActiveTab,
+    moveTab,
     renameTab,
     autoNameTab,
     getTab,

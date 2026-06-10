@@ -64,6 +64,12 @@ export function useConfig() {
     }
   }
 
+  async function maybeSetDefaultWorkDir(dir: string) {
+    if (!windowSession.value || windowSession.value.defaultWorkDir || !dir) return
+    windowSession.value.defaultWorkDir = dir
+    await saveWindowSession()
+  }
+
   async function saveTabState(tabs: TabConfig[]) {
     if (!windowSession.value) return
     windowSession.value.tabs = tabs
@@ -85,6 +91,7 @@ export function useConfig() {
     saveGlobalConfig,
     setWindowSession,
     saveWindowSession,
+    maybeSetDefaultWorkDir,
     saveTabState,
     saveWindowName,
   }
