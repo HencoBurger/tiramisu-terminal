@@ -20,6 +20,7 @@ import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { TerminalStart, TerminalInput, TerminalResize, TerminalStop } from '../../wailsjs/go/main/App'
+import { ClipboardGetText, ClipboardSetText } from '../../wailsjs/runtime/runtime'
 import { useTabs } from '../composables/useTabs'
 import { useConfig } from '../composables/useConfig'
 import { useSound } from '../composables/useSound'
@@ -31,11 +32,12 @@ const props = defineProps<{
 }>()
 
 const { activeTabId, setTabWorkDir, setTabActivity } = useTabs()
-const { config } = useConfig()
+const { effectiveConfig } = useConfig()
 const { play } = useSound()
 
 const containerRef = ref<HTMLElement>()
 const showWorkDirPicker = ref(false)
+const contextMenu = ref<{ x: number; y: number; hasCopy: boolean; hasPaste: boolean } | null>(null)
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
 let resizeObserver: ResizeObserver | null = null
@@ -73,12 +75,88 @@ function startTerminal() {
     TerminalInput(props.tab.id, encoded).catch(() => {})
   })
 
+  // Right-click: show context menu
+  const xtermEl = terminal.element
+  if (xtermEl) {
+    xtermEl.addEventListener('contextmenu', async (e: MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (!terminal) return
+
+      const hasCopy = !!terminal.getSelection()
+      let hasPaste = false
+      try {
+        const text = await ClipboardGetText()
+        hasPaste = !!text
+      } catch {}
+
+      if (!hasCopy && !hasPaste) return
+
+      contextMenu.value = { x: e.clientX, y: e.clientY, hasCopy, hasPaste }
+    }, true)
+  }
+
+  // Keyboard shortcuts
+  terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+    if (e.type !== 'keydown') return true
+
+    // Ctrl+Shift+C → copy
+    if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+      copySelection()
+      return false
+    }
+    // Ctrl+Shift+V → paste
+    if (e.ctrlKey && e.shiftKey && e.key === 'V') {
+      pasteClipboard()
+      return false
+    }
+    // Ctrl+C with selection → copy instead of SIGINT
+    if (e.ctrlKey && !e.shiftKey && e.key === 'c' && terminal?.hasSelection()) {
+      copySelection()
+      return false
+    }
+
+    return true
+  })
+
   resizeObserver = new ResizeObserver(() => {
     if (!fitAddon || !terminal) return
     fitAddon.fit()
     TerminalResize(props.tab.id, terminal.cols, terminal.rows).catch(() => {})
   })
   resizeObserver.observe(containerRef.value)
+}
+
+function copySelection() {
+  if (!terminal) return
+  const selection = terminal.getSelection()
+  if (selection) {
+    ClipboardSetText(selection)
+    terminal.clearSelection()
+  }
+}
+
+function pasteClipboard() {
+  ClipboardGetText().then((text) => {
+    if (text) {
+      const encoded = btoa(text)
+      TerminalInput(props.tab.id, encoded).catch(() => {})
+    }
+  }).catch(() => {})
+}
+
+function closeContextMenu() {
+  contextMenu.value = null
+}
+
+function handleContextCopy() {
+  copySelection()
+  closeContextMenu()
+}
+
+function handleContextPaste() {
+  pasteClipboard()
+  closeContextMenu()
 }
 
 function handleOutput(sessionId: string, base64Data: string) {
@@ -99,7 +177,7 @@ function resetIdleTimer() {
     setTabActivity(props.tab.id, false)
 
     if (props.tab.id !== activeTabId.value) {
-      const soundName = props.tab.soundOverride || config.value.defaultSound
+      const soundName = props.tab.soundOverride || effectiveConfig.value.defaultSound
       if (soundName) play(soundName)
     }
   }, 3000)
@@ -130,7 +208,12 @@ watch(() => activeTabId.value, (newId) => {
   }
 })
 
+function onDocumentClick() {
+  if (contextMenu.value) contextMenu.value = null
+}
+
 onMounted(() => {
+  document.addEventListener('click', onDocumentClick)
   ensureGlobalListener()
   outputHandlers.set(props.tab.id, handleOutput)
   if (props.tab.workDir) {
@@ -141,6 +224,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  document.removeEventListener('click', onDocumentClick)
   outputHandlers.delete(props.tab.id)
   if (idleTimer) clearTimeout(idleTimer)
   if (resizeObserver) resizeObserver.disconnect()
@@ -168,6 +252,18 @@ onUnmounted(() => {
       </div>
     </div>
     <div v-else ref="containerRef" class="flex-1 overflow-hidden p-1" />
+    <!-- Terminal context menu -->
+    <div
+      v-if="contextMenu"
+      class="fixed z-50"
+      :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+    >
+      <ul class="menu bg-base-200 rounded-box shadow-lg w-48 p-1">
+        <li v-if="contextMenu.hasCopy"><a @click="handleContextCopy">Copy</a></li>
+        <li v-if="contextMenu.hasPaste"><a @click="handleContextPaste">Paste</a></li>
+      </ul>
+    </div>
+
     <WorkDirPicker
       :open="showWorkDirPicker"
       @update:open="showWorkDirPicker = $event"

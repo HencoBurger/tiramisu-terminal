@@ -104,3 +104,35 @@ export interface AppConfig {
   tabs: TabConfig[]
   profiles: Profile[]
 }
+
+export interface GlobalConfig {
+  defaultSound: string
+  theme: string
+  permissionMode: string
+  profiles: Profile[]
+}
+
+export interface WindowSession {
+  id: string
+  name: string
+  tabs: TabConfig[]
+  themeOverride?: string
+  soundOverride?: string
+  permModeOverride?: string
+  createdAt: number
+  lastOpenedAt: number
+}
+
+export interface WindowSessionSummary {
+  id: string
+  name: string
+  tabCount: number
+  lastOpenedAt: number
+}
+
+export interface EffectiveConfig {
+  theme: string
+  defaultSound: string
+  permissionMode: string
+  profiles: Profile[]
+}

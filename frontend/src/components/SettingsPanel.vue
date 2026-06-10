@@ -13,13 +13,22 @@ const emit = defineEmits<{
   'update:open': [value: boolean]
 }>()
 
-const { config, saveFullConfig } = useConfig()
+const { globalConfig, windowSession, effectiveConfig, saveGlobalConfig, saveWindowSession } = useConfig()
 const { SOUNDS, play } = useSound()
 
-const localSound = ref(config.value.defaultSound)
-const localTheme = ref(config.value.theme)
-const localPermMode = ref(config.value.permissionMode || 'default')
+// Global defaults
+const localSound = ref('')
+const localTheme = ref('')
+const localPermMode = ref('')
 const localProfiles = ref<Profile[]>([])
+
+// Session overrides
+const overrideTheme = ref(false)
+const overrideSound = ref(false)
+const overridePermMode = ref(false)
+const localSessionTheme = ref('')
+const localSessionSound = ref('')
+const localSessionPermMode = ref('')
 
 const themes = ['dark', 'light', 'dracula', 'night', 'dim', 'sunset', 'business', 'coffee']
 
@@ -35,10 +44,20 @@ const newProfileHomeDir = ref('')
 
 watch(() => props.open, (isOpen) => {
   if (isOpen) {
-    localSound.value = config.value.defaultSound
-    localTheme.value = config.value.theme
-    localPermMode.value = config.value.permissionMode || 'default'
-    localProfiles.value = JSON.parse(JSON.stringify(config.value.profiles || []))
+    // Load global values
+    localSound.value = globalConfig.value.defaultSound
+    localTheme.value = globalConfig.value.theme
+    localPermMode.value = globalConfig.value.permissionMode || 'default'
+    localProfiles.value = JSON.parse(JSON.stringify(globalConfig.value.profiles || []))
+
+    // Load session override state
+    const ws = windowSession.value
+    overrideTheme.value = !!(ws?.themeOverride)
+    overrideSound.value = !!(ws?.soundOverride)
+    overridePermMode.value = !!(ws?.permModeOverride)
+    localSessionTheme.value = ws?.themeOverride || localTheme.value
+    localSessionSound.value = ws?.soundOverride || localSound.value
+    localSessionPermMode.value = ws?.permModeOverride || localPermMode.value
   }
 })
 
@@ -72,13 +91,25 @@ function removeProfile(id: string) {
 }
 
 async function save() {
-  await saveFullConfig({
-    ...config.value,
+  // Save global config
+  await saveGlobalConfig({
     defaultSound: localSound.value,
     theme: localTheme.value,
     permissionMode: localPermMode.value,
     profiles: localProfiles.value,
   })
+
+  // Save session overrides
+  if (windowSession.value) {
+    windowSession.value.themeOverride = overrideTheme.value ? localSessionTheme.value : ''
+    windowSession.value.soundOverride = overrideSound.value ? localSessionSound.value : ''
+    windowSession.value.permModeOverride = overridePermMode.value ? localSessionPermMode.value : ''
+    await saveWindowSession()
+  }
+
+  // Apply effective theme
+  document.documentElement.setAttribute('data-theme', effectiveConfig.value.theme)
+
   emit('update:open', false)
 }
 
@@ -91,6 +122,8 @@ function close() {
   <dialog class="modal" :class="{ 'modal-open': open }">
     <div class="modal-box max-w-2xl">
       <h3 class="text-lg font-bold mb-4">Settings</h3>
+
+      <div class="divider text-sm font-semibold">Global Defaults</div>
 
       <div class="form-control mb-4">
         <label class="label">
@@ -134,6 +167,60 @@ function close() {
           <option v-for="t in themes" :key="t" :value="t">{{ t }}</option>
         </select>
       </div>
+
+      <!-- Session overrides -->
+      <template v-if="windowSession">
+        <div class="divider text-sm font-semibold">Session Overrides</div>
+        <p class="text-sm text-base-content/50 mb-3">
+          Override global defaults for this session only.
+        </p>
+
+        <div class="form-control mb-3">
+          <label class="label cursor-pointer justify-start gap-3">
+            <input type="checkbox" v-model="overrideTheme" class="checkbox checkbox-sm" />
+            <span class="label-text">Override theme for this session</span>
+          </label>
+          <select
+            v-if="overrideTheme"
+            v-model="localSessionTheme"
+            class="select select-bordered select-sm mt-1 ml-9"
+          >
+            <option v-for="t in themes" :key="t" :value="t">{{ t }}</option>
+          </select>
+        </div>
+
+        <div class="form-control mb-3">
+          <label class="label cursor-pointer justify-start gap-3">
+            <input type="checkbox" v-model="overrideSound" class="checkbox checkbox-sm" />
+            <span class="label-text">Override sound for this session</span>
+          </label>
+          <div v-if="overrideSound" class="flex gap-2 mt-1 ml-9">
+            <select v-model="localSessionSound" class="select select-bordered select-sm flex-1">
+              <option v-for="s in SOUNDS" :key="s" :value="s">{{ s }}</option>
+              <option value="">None</option>
+            </select>
+            <button class="btn btn-outline btn-xs" :disabled="!localSessionSound" @click="previewSound(localSessionSound)">
+              Preview
+            </button>
+          </div>
+        </div>
+
+        <div class="form-control mb-3">
+          <label class="label cursor-pointer justify-start gap-3">
+            <input type="checkbox" v-model="overridePermMode" class="checkbox checkbox-sm" />
+            <span class="label-text">Override permission mode for this session</span>
+          </label>
+          <select
+            v-if="overridePermMode"
+            v-model="localSessionPermMode"
+            class="select select-bordered select-sm mt-1 ml-9"
+          >
+            <option v-for="m in permissionModes" :key="m.value" :value="m.value">
+              {{ m.label }}
+            </option>
+          </select>
+        </div>
+      </template>
 
       <div class="divider">Profiles</div>
 

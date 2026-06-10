@@ -17,9 +17,9 @@ const props = defineProps<{
 
 const { startSession, sendMessage, resumeSession, stopSession } = useSession()
 const { addMessage, setTabStatus, setTabWorkDir, setTabProfile, setTabPlanMode, setTabModel, autoNameTab, renameTab } = useTabs()
-const { config } = useConfig()
+const { effectiveConfig } = useConfig()
 
-const profiles = computed(() => config.value.profiles || [])
+const profiles = computed(() => effectiveConfig.value.profiles || [])
 
 const emit = defineEmits<{
   command: [action: string]

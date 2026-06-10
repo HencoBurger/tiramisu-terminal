@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { EventsOn, EventsOff } from '../wailsjs/runtime/runtime'
-import { LoadSessionHistory, TerminalStop, SetWindowTitle, NewWindow } from '../wailsjs/go/main/App'
+import {
+  LoadSessionHistory,
+  TerminalStop,
+  SetWindowTitle,
+  NewWindow,
+  CreateWindowSession,
+  LoadWindowSession,
+} from '../wailsjs/go/main/App'
 import { useTabs } from './composables/useTabs'
 import { useConfig } from './composables/useConfig'
 import { useSound } from './composables/useSound'
@@ -11,6 +18,7 @@ import TabBar from './components/TabBar.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import TerminalPanel from './components/TerminalPanel.vue'
 import SessionBrowser from './components/SessionBrowser.vue'
+import SessionPicker from './components/SessionPicker.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import DebugDrawer from './components/DebugDrawer.vue'
 
@@ -31,30 +39,39 @@ const {
   addMessage,
 } = useTabs()
 
-const { config, projectName, loadConfig, saveTabState, saveProjectName } = useConfig()
+const {
+  effectiveConfig,
+  windowSession,
+  loadGlobalConfig,
+  saveTabState,
+  saveWindowName,
+  setWindowSession,
+} = useConfig()
 const { play } = useSound()
 
+const sessionLoaded = ref(false)
+const showSessionPicker = ref(false)
 const showSessionBrowser = ref(false)
 const showSettings = ref(false)
 const showDebug = ref(false)
 const debugLogs = ref<string[]>([])
 const contextMenu = ref<{ tabId: string; x: number; y: number } | null>(null)
 
-// Project name inline editing
-const isRenamingProject = ref(false)
-const projectNameInput = ref('')
-const projectNameEl = ref<HTMLInputElement>()
+// Session name inline editing
+const isRenamingSession = ref(false)
+const sessionNameInput = ref('')
+const sessionNameEl = ref<HTMLInputElement>()
 
-function startProjectRename() {
-  projectNameInput.value = projectName.value
-  isRenamingProject.value = true
-  setTimeout(() => projectNameEl.value?.select(), 0)
+function startSessionRename() {
+  sessionNameInput.value = windowSession.value?.name || 'Untitled'
+  isRenamingSession.value = true
+  setTimeout(() => sessionNameEl.value?.select(), 0)
 }
 
-function finishProjectRename() {
-  const name = projectNameInput.value.trim()
-  saveProjectName(name)
-  isRenamingProject.value = false
+function finishSessionRename() {
+  const name = sessionNameInput.value.trim()
+  saveWindowName(name)
+  isRenamingSession.value = false
 }
 
 // Debounced tab config save
@@ -72,26 +89,9 @@ watch(
   () => debouncedSaveTabState(),
 )
 
-// Set window title from project name on startup (handled in onMounted via loadConfig -> SetProjectName)
-// No tab-based title updates needed — window title is purely the project name
-
 onMounted(async () => {
-  await loadConfig()
-  SetWindowTitle(projectName.value).catch(() => {})
-
-  // Restore tabs from config
-  if (config.value.tabs && config.value.tabs.length > 0) {
-    restoreTabs(config.value.tabs)
-
-    // Load conversation history for chat tabs with existing sessions
-    for (const tabCfg of config.value.tabs) {
-      if (tabCfg.sessionId && tabCfg.workDir && (tabCfg.type || 'chat') === 'chat') {
-        loadTabHistory(tabCfg.id, tabCfg.sessionId, tabCfg.workDir)
-      }
-    }
-  } else {
-    addTab()
-  }
+  await loadGlobalConfig()
+  showSessionPicker.value = true
 
   // Listen for session events from Go backend
   EventsOn('session:event', (tabId: string, line: string) => {
@@ -107,8 +107,7 @@ onMounted(async () => {
       setTabStatus(tabId, 'error')
     }
 
-    // Play sound when session completes
-    const soundName = tab.soundOverride || config.value.defaultSound
+    const soundName = tab.soundOverride || effectiveConfig.value.defaultSound
     if (soundName) {
       play(soundName)
     }
@@ -123,6 +122,40 @@ onUnmounted(() => {
   EventsOff('session:done')
   document.removeEventListener('keydown', handleKeydown)
 })
+
+// Session picker handlers
+async function handleSessionCreate(name: string) {
+  try {
+    const session = await CreateWindowSession(name)
+    setWindowSession(session as any)
+    addTab()
+    sessionLoaded.value = true
+  } catch (e) {
+    console.error('Failed to create session:', e)
+  }
+}
+
+async function handleSessionSelect(id: string) {
+  try {
+    const loaded = await LoadWindowSession(id)
+    setWindowSession(loaded as any)
+
+    if (loaded.tabs && loaded.tabs.length > 0) {
+      restoreTabs(loaded.tabs as any)
+      for (const tabCfg of loaded.tabs) {
+        if (tabCfg.sessionId && tabCfg.workDir && (tabCfg.type || 'chat') === 'chat') {
+          loadTabHistory(tabCfg.id, tabCfg.sessionId, tabCfg.workDir)
+        }
+      }
+    } else {
+      addTab()
+    }
+
+    sessionLoaded.value = true
+  } catch (e) {
+    console.error('Failed to load session:', e)
+  }
+}
 
 function handleKeydown(e: KeyboardEvent) {
   // Close context menu on any key
@@ -264,81 +297,94 @@ function handleResumeSession(session: StoredSession) {
 
 <template>
   <div class="h-screen flex flex-col bg-base-100" @click="closeContextMenu">
-    <!-- Tab bar with project title -->
-    <div class="flex items-end bg-base-300 pt-1" style="--wails-draggable: drag">
-      <div class="flex items-center px-2 pb-1.5 shrink-0" style="--wails-draggable: no-drag">
-        <input
-          v-if="isRenamingProject"
-          ref="projectNameEl"
-          v-model="projectNameInput"
-          class="input input-ghost input-sm w-32 px-1 text-base-content font-semibold text-sm"
-          @blur="finishProjectRename"
-          @keydown.enter="finishProjectRename"
-          @keydown.escape="isRenamingProject = false"
-        />
-        <span
-          v-else
-          class="text-sm font-semibold text-base-content/70 hover:text-base-content cursor-pointer"
-          @click="startProjectRename"
-          :title="'Click to rename project'"
-        >{{ projectName }}</span>
-      </div>
-      <TabBar class="flex-1" @tab-context-menu="handleTabContextMenu" />
-    </div>
+    <!-- Session picker (shown on startup, mandatory) -->
+    <SessionPicker
+      :open="showSessionPicker && !sessionLoaded"
+      :mandatory="!sessionLoaded"
+      @create="handleSessionCreate"
+      @select="handleSessionSelect"
+      @update:open="showSessionPicker = $event"
+    />
 
-    <!-- Main content area: chat + debug side by side -->
-    <div class="flex-1 overflow-hidden flex">
-      <!-- Chat panels -->
-      <div class="flex-1 overflow-hidden relative">
-        <div
-          v-for="tab in tabs"
-          :key="tab.id"
-          v-show="tab.id === activeTabId"
-          class="absolute inset-0"
-        >
-          <ChatPanel v-if="tab.type === 'chat' || !tab.type" :tab="tab" @command="handleGlobalCommand" />
-          <TerminalPanel v-else-if="tab.type === 'terminal'" :tab="tab" />
+    <!-- Main content (only after session is loaded) -->
+    <template v-if="sessionLoaded">
+      <!-- Tab bar with session name -->
+      <div class="flex items-end bg-base-300 pt-1" style="--wails-draggable: drag">
+        <div class="flex items-center px-2 pb-1.5 shrink-0" style="--wails-draggable: no-drag">
+          <input
+            v-if="isRenamingSession"
+            ref="sessionNameEl"
+            v-model="sessionNameInput"
+            class="input input-ghost input-sm w-32 px-1 text-base-content font-semibold text-sm"
+            @blur="finishSessionRename"
+            @keydown.enter="finishSessionRename"
+            @keydown.escape="isRenamingSession = false"
+          />
+          <span
+            v-else
+            class="text-sm font-semibold text-base-content/70 hover:text-base-content cursor-pointer"
+            @click="startSessionRename"
+            :title="'Click to rename session'"
+          >{{ windowSession?.name || 'Untitled' }}</span>
         </div>
+        <TabBar class="flex-1" @tab-context-menu="handleTabContextMenu" />
+      </div>
 
-        <!-- Empty state -->
-        <div v-if="tabs.length === 0" class="flex items-center justify-center h-full text-base-content/30">
-          <div class="text-center">
-            <p class="text-xl mb-4">Welcome to Tiramisu</p>
-            <p class="mb-4">Press <kbd class="kbd kbd-sm">Ctrl+T</kbd> or click + to create a new tab</p>
-            <div class="flex gap-2 justify-center">
-              <button class="btn btn-outline btn-sm" @click="addTab()">New Tab</button>
-              <button class="btn btn-outline btn-sm" @click="showSessionBrowser = true">Browse Sessions</button>
+      <!-- Main content area: chat + debug side by side -->
+      <div class="flex-1 overflow-hidden flex">
+        <!-- Chat panels -->
+        <div class="flex-1 overflow-hidden relative">
+          <div
+            v-for="tab in tabs"
+            :key="tab.id"
+            v-show="tab.id === activeTabId"
+            class="absolute inset-0"
+          >
+            <ChatPanel v-if="tab.type === 'chat' || !tab.type" :tab="tab" @command="handleGlobalCommand" />
+            <TerminalPanel v-else-if="tab.type === 'terminal'" :tab="tab" />
+          </div>
+
+          <!-- Empty state -->
+          <div v-if="tabs.length === 0" class="flex items-center justify-center h-full text-base-content/30">
+            <div class="text-center">
+              <p class="text-xl mb-4">Welcome to Tiramisu</p>
+              <p class="mb-4">Press <kbd class="kbd kbd-sm">Ctrl+T</kbd> or click + to create a new tab</p>
+              <div class="flex gap-2 justify-center">
+                <button class="btn btn-outline btn-sm" @click="addTab()">New Tab</button>
+                <button class="btn btn-outline btn-sm" @click="showSessionBrowser = true">Browse Sessions</button>
+              </div>
             </div>
           </div>
         </div>
+
+        <!-- Debug drawer (inline, pushes chat aside) -->
+        <DebugDrawer
+          v-if="showDebug"
+          :open="showDebug"
+          :logs="debugLogs"
+          @update:open="showDebug = $event"
+          @clear="debugLogs = []"
+        />
       </div>
 
-      <!-- Debug drawer (inline, pushes chat aside) -->
-      <DebugDrawer
-        v-if="showDebug"
-        :open="showDebug"
-        :logs="debugLogs"
-        @update:open="showDebug = $event"
-        @clear="debugLogs = []"
-      />
-    </div>
-
-    <!-- Status bar -->
-    <div class="flex items-center px-3 py-1 text-xs bg-base-300 text-base-content/50 gap-4">
-      <span>{{ tabs.length }} tab{{ tabs.length !== 1 ? 's' : '' }}</span>
-      <span v-if="activeTab?.workDir" class="font-mono truncate max-w-xs" :title="activeTab.workDir">
-        {{ activeTab.workDir }}
-      </span>
-      <span class="ml-auto flex items-center gap-4">
-        <span v-if="activeTab?.totalCost">
-          ${{ activeTab.totalCost.toFixed(4) }}
+      <!-- Status bar -->
+      <div class="flex items-center px-3 py-1 text-xs bg-base-300 text-base-content/50 gap-4">
+        <span>{{ tabs.length }} tab{{ tabs.length !== 1 ? 's' : '' }}</span>
+        <span v-if="activeTab?.workDir" class="font-mono truncate max-w-xs" :title="activeTab.workDir">
+          {{ activeTab.workDir }}
         </span>
-        <button class="btn btn-ghost btn-xs" @click="NewWindow().catch(() => {})">New Window</button>
-        <button class="btn btn-ghost btn-xs" @click="showSessionBrowser = true">Sessions</button>
-        <button class="btn btn-ghost btn-xs" @click="showSettings = true">Settings</button>
-        <button class="btn btn-ghost btn-xs" :class="{ 'text-warning': showDebug }" @click="showDebug = !showDebug">Debug</button>
-      </span>
-    </div>
+        <span class="ml-auto flex items-center gap-4">
+          <span v-if="activeTab?.totalCost">
+            ${{ activeTab.totalCost.toFixed(4) }}
+          </span>
+          <button class="btn btn-ghost btn-xs" @click="NewWindow().catch(() => {})">New Window</button>
+          <button class="btn btn-ghost btn-xs" @click="showSessionPicker = true">Sessions</button>
+          <button class="btn btn-ghost btn-xs" @click="showSessionBrowser = true">Browse Claude</button>
+          <button class="btn btn-ghost btn-xs" @click="showSettings = true">Settings</button>
+          <button class="btn btn-ghost btn-xs" :class="{ 'text-warning': showDebug }" @click="showDebug = !showDebug">Debug</button>
+        </span>
+      </div>
+    </template>
 
     <!-- Context menu -->
     <div
@@ -354,6 +400,14 @@ function handleResumeSession(session: StoredSession) {
     </div>
 
     <!-- Modals -->
+    <SessionPicker
+      v-if="sessionLoaded"
+      :open="showSessionPicker && sessionLoaded"
+      :mandatory="false"
+      @create="handleSessionCreate"
+      @select="handleSessionSelect"
+      @update:open="showSessionPicker = $event"
+    />
     <SessionBrowser
       :open="showSessionBrowser"
       @update:open="showSessionBrowser = $event"

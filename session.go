@@ -89,8 +89,8 @@ func (a *App) spawnClaude(tabID, workDir, sessionID, prompt, profileID, model st
 		"--verbose",
 	}
 
-	// Apply permission mode from config
-	permMode := a.config.PermissionMode
+	// Apply permission mode from effective config
+	permMode := a.effectivePermissionMode()
 	if permMode == "bypassPermissions" {
 		args = append(args, "--dangerously-skip-permissions")
 	} else if permMode == "acceptEdits" {
@@ -259,9 +259,9 @@ func (a *App) GetSessionID(tabID string) string {
 
 // findProfile looks up a profile by ID from the config.
 func (a *App) findProfile(id string) *Profile {
-	for i := range a.config.Profiles {
-		if a.config.Profiles[i].ID == id {
-			return &a.config.Profiles[i]
+	for i := range a.globalConfig.Profiles {
+		if a.globalConfig.Profiles[i].ID == id {
+			return &a.globalConfig.Profiles[i]
 		}
 	}
 	return nil

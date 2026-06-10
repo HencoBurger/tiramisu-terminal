@@ -1,5 +1,5 @@
 export namespace main {
-	
+
 	export class TabConfig {
 	    id: string;
 	    name: string;
@@ -42,16 +42,14 @@ export namespace main {
 	        this.homeDir = source["homeDir"];
 	    }
 	}
-	export class AppConfig {
+	export class GlobalConfig {
 	    defaultSound: string;
 	    theme: string;
 	    permissionMode: string;
-	    projectName: string;
-	    tabs: TabConfig[];
 	    profiles: Profile[];
 
 	    static createFrom(source: any = {}) {
-	        return new AppConfig(source);
+	        return new GlobalConfig(source);
 	    }
 
 	    constructor(source: any = {}) {
@@ -59,11 +57,107 @@ export namespace main {
 	        this.defaultSound = source["defaultSound"];
 	        this.theme = source["theme"];
 	        this.permissionMode = source["permissionMode"];
-	        this.projectName = source["projectName"];
-	        this.tabs = this.convertValues(source["tabs"], TabConfig);
 	        this.profiles = this.convertValues(source["profiles"], Profile);
 	    }
-	
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class WindowSession {
+	    id: string;
+	    name: string;
+	    tabs: TabConfig[];
+	    themeOverride?: string;
+	    soundOverride?: string;
+	    permModeOverride?: string;
+	    createdAt: number;
+	    lastOpenedAt: number;
+
+	    static createFrom(source: any = {}) {
+	        return new WindowSession(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.tabs = this.convertValues(source["tabs"], TabConfig);
+	        this.themeOverride = source["themeOverride"];
+	        this.soundOverride = source["soundOverride"];
+	        this.permModeOverride = source["permModeOverride"];
+	        this.createdAt = source["createdAt"];
+	        this.lastOpenedAt = source["lastOpenedAt"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class WindowSessionSummary {
+	    id: string;
+	    name: string;
+	    tabCount: number;
+	    lastOpenedAt: number;
+
+	    static createFrom(source: any = {}) {
+	        return new WindowSessionSummary(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.tabCount = source["tabCount"];
+	        this.lastOpenedAt = source["lastOpenedAt"];
+	    }
+	}
+	export class EffectiveConfig {
+	    theme: string;
+	    defaultSound: string;
+	    permissionMode: string;
+	    profiles: Profile[];
+
+	    static createFrom(source: any = {}) {
+	        return new EffectiveConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.theme = source["theme"];
+	        this.defaultSound = source["defaultSound"];
+	        this.permissionMode = source["permissionMode"];
+	        this.profiles = this.convertValues(source["profiles"], Profile);
+	    }
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -140,11 +234,11 @@ export namespace main {
 	    firstPrompt: string;
 	    messageCount: number;
 	    lastModified: number;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new StoredSession(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.sessionId = source["sessionId"];
@@ -156,4 +250,3 @@ export namespace main {
 	}
 
 }
-
