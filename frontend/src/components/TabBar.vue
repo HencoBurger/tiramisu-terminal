@@ -105,8 +105,9 @@ onUnmounted(() => {
       @dragstart="(e) => onTabDragStart(tab.id, e)"
     />
     <button
-      class="btn btn-ghost btn-sm px-2 min-h-0 h-7 text-base-content/60 hover:text-base-content"
+      class="btn btn-ghost btn-sm min-h-0 h-8 w-9 shrink-0 sticky right-0 bg-base-300 text-lg leading-none text-base-content/60 hover:text-base-content"
       style="--wails-draggable: no-drag"
+      title="New tab (Ctrl+T)"
       @click.stop="toggleMenu"
     >
       +
