@@ -19,7 +19,8 @@ function ensureGlobalListener() {
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import { TerminalStart, TerminalInput, TerminalResize, TerminalStop } from '../../wailsjs/go/main/App'
+import { SerializeAddon } from '@xterm/addon-serialize'
+import { TerminalStart, TerminalInput, TerminalResize, TerminalStop, TerminalSaveScrollback, TerminalLoadScrollback } from '../../wailsjs/go/main/App'
 import { ClipboardGetText, ClipboardSetText } from '../../wailsjs/runtime/runtime'
 import { useTabs } from '../composables/useTabs'
 import { useConfig } from '../composables/useConfig'
@@ -40,12 +41,13 @@ const showWorkDirPicker = ref(false)
 const contextMenu = ref<{ x: number; y: number; hasCopy: boolean; hasPaste: boolean } | null>(null)
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
+let serializeAddon: SerializeAddon | null = null
 let resizeObserver: ResizeObserver | null = null
 let started = false
 let idleTimer: ReturnType<typeof setTimeout> | null = null
 let suppressActivity = false
 
-function startTerminal() {
+async function startTerminal() {
   if (started || !containerRef.value || !props.tab.workDir) return
   started = true
 
@@ -53,18 +55,32 @@ function startTerminal() {
     cursorBlink: true,
     fontSize: 14,
     fontFamily: 'monospace',
+    scrollback: 5000,
     theme: {
       background: '#1d232a',
       foreground: '#a6adbb',
     },
   })
   fitAddon = new FitAddon()
+  serializeAddon = new SerializeAddon()
   terminal.loadAddon(fitAddon)
+  terminal.loadAddon(serializeAddon)
   terminal.open(containerRef.value)
   fitAddon.fit()
 
   const cols = terminal.cols
   const rows = terminal.rows
+
+  // Restore the previous session's visual scrollback (if any) before the fresh
+  // shell starts printing, so the old content sits above the new live prompt.
+  try {
+    const saved = await TerminalLoadScrollback(props.tab.id)
+    if (saved && terminal) {
+      const bytes = Uint8Array.from(atob(saved), c => c.charCodeAt(0))
+      terminal.write(bytes)
+      terminal.write('\r\n\x1b[2m──── session restored ────\x1b[0m\r\n')
+    }
+  } catch {}
 
   TerminalStart(props.tab.id, cols, rows, props.tab.workDir).catch((err: any) => {
     console.error('Failed to start terminal:', err)
@@ -184,10 +200,35 @@ function handleOutput(sessionId: string, base64Data: string) {
   }
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  // Build the binary string in chunks — spreading a large array into
+  // String.fromCharCode overflows the call stack.
+  let binary = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+  }
+  return btoa(binary)
+}
+
+function saveScrollback() {
+  if (!serializeAddon) return
+  try {
+    const snapshot = serializeAddon.serialize()
+    if (!snapshot) return
+    // Encode the UTF-8 bytes so non-ASCII characters (box-drawing, emoji, etc.)
+    // survive the round-trip; xterm.write() decodes the bytes back as UTF-8.
+    const encoded = bytesToBase64(new TextEncoder().encode(snapshot))
+    TerminalSaveScrollback(props.tab.id, encoded).catch(() => {})
+  } catch {}
+}
+
 function resetIdleTimer() {
   if (idleTimer) clearTimeout(idleTimer)
   idleTimer = setTimeout(() => {
     setTabActivity(props.tab.id, false)
+    // Output has settled — snapshot the buffer for restore on next launch.
+    saveScrollback()
 
     if (props.tab.id !== activeTabId.value) {
       const soundName = props.tab.soundOverride || effectiveConfig.value.defaultSound
@@ -243,6 +284,8 @@ onUnmounted(() => {
   if (idleTimer) clearTimeout(idleTimer)
   if (resizeObserver) resizeObserver.disconnect()
   if (started) {
+    // Best-effort final snapshot before the panel goes away.
+    saveScrollback()
     TerminalStop(props.tab.id).catch(() => {})
   }
   if (terminal) {

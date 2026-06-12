@@ -6,10 +6,15 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/aymanbagabas/go-pty"
 )
+
+// maxScrollbackBytes caps how much per-tab terminal scrollback we persist.
+const maxScrollbackBytes = 256 * 1024
 
 // PTYSession holds a single terminal session.
 type PTYSession struct {
@@ -137,6 +142,79 @@ func (a *App) closePTY(session *PTYSession) error {
 	}
 
 	return err
+}
+
+// scrollbackDir returns ~/.tiramisu/scrollback, creating it if needed.
+func (a *App) scrollbackDir() (string, error) {
+	cfgDir, err := a.configDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(cfgDir, "scrollback")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+// scrollbackPath returns the on-disk path for a tab's scrollback snapshot, or an
+// error if the tab ID is unsafe to use as a filename.
+func (a *App) scrollbackPath(tabID string) (string, error) {
+	if tabID == "" || strings.ContainsAny(tabID, "/\\") || strings.Contains(tabID, "..") {
+		return "", fmt.Errorf("invalid tab id %q", tabID)
+	}
+	dir, err := a.scrollbackDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, tabID+".ansi"), nil
+}
+
+// TerminalSaveScrollback persists a serialized snapshot of a tab's terminal
+// buffer. The newest data is kept; anything beyond maxScrollbackBytes is dropped
+// from the front.
+func (a *App) TerminalSaveScrollback(tabID string, base64Data string) error {
+	path, err := a.scrollbackPath(tabID)
+	if err != nil {
+		return err
+	}
+	data, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return fmt.Errorf("failed to decode scrollback: %w", err)
+	}
+	if len(data) > maxScrollbackBytes {
+		data = data[len(data)-maxScrollbackBytes:]
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// TerminalLoadScrollback returns a tab's persisted scrollback snapshot,
+// base64-encoded, or "" if none exists.
+func (a *App) TerminalLoadScrollback(tabID string) (string, error) {
+	path, err := a.scrollbackPath(tabID)
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(data), nil
+}
+
+// TerminalDeleteScrollback removes a tab's persisted scrollback snapshot.
+func (a *App) TerminalDeleteScrollback(tabID string) error {
+	path, err := a.scrollbackPath(tabID)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 // readTerminalOutput reads PTY output and emits events to the frontend.

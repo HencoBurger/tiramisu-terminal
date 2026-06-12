@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -103,6 +104,55 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.loadGlobalConfig()
 	a.migrateOldConfig()
+	a.cleanupOrphanScrollback()
+}
+
+// cleanupOrphanScrollback removes persisted terminal scrollback files for tabs
+// that are no longer referenced by any saved window session. This reclaims disk
+// for tabs the user permanently closed, while keeping files for tabs that simply
+// survived an app quit.
+func (a *App) cleanupOrphanScrollback() {
+	scrollDir, err := a.scrollbackDir()
+	if err != nil {
+		return
+	}
+	scrollEntries, err := os.ReadDir(scrollDir)
+	if err != nil {
+		return
+	}
+
+	// Collect every tab ID referenced across all session files.
+	referenced := make(map[string]bool)
+	if sessDir, err := a.sessionsDir(); err == nil {
+		if sessEntries, err := os.ReadDir(sessDir); err == nil {
+			for _, entry := range sessEntries {
+				if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+					continue
+				}
+				data, err := os.ReadFile(filepath.Join(sessDir, entry.Name()))
+				if err != nil {
+					continue
+				}
+				var ws WindowSession
+				if err := json.Unmarshal(data, &ws); err != nil {
+					continue
+				}
+				for _, tab := range ws.Tabs {
+					referenced[tab.ID] = true
+				}
+			}
+		}
+	}
+
+	for _, entry := range scrollEntries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".ansi" {
+			continue
+		}
+		tabID := strings.TrimSuffix(entry.Name(), ".ansi")
+		if !referenced[tabID] {
+			_ = os.Remove(filepath.Join(scrollDir, entry.Name()))
+		}
+	}
 }
 
 func (a *App) safeEmit(eventName string, data ...interface{}) {

@@ -86,12 +86,24 @@ export function SetWindowTitle(arg1) {
   return window['go']['main']['App']['SetWindowTitle'](arg1);
 }
 
+export function TerminalDeleteScrollback(arg1) {
+  return window['go']['main']['App']['TerminalDeleteScrollback'](arg1);
+}
+
 export function TerminalInput(arg1, arg2) {
   return window['go']['main']['App']['TerminalInput'](arg1, arg2);
 }
 
+export function TerminalLoadScrollback(arg1) {
+  return window['go']['main']['App']['TerminalLoadScrollback'](arg1);
+}
+
 export function TerminalResize(arg1, arg2, arg3) {
   return window['go']['main']['App']['TerminalResize'](arg1, arg2, arg3);
+}
+
+export function TerminalSaveScrollback(arg1, arg2) {
+  return window['go']['main']['App']['TerminalSaveScrollback'](arg1, arg2);
 }
 
 export function TerminalStart(arg1, arg2, arg3, arg4) {

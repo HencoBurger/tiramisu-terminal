@@ -44,9 +44,15 @@ export function SessionStop(arg1:string):Promise<void>;
 
 export function SetWindowTitle(arg1:string):Promise<void>;
 
+export function TerminalDeleteScrollback(arg1:string):Promise<void>;
+
 export function TerminalInput(arg1:string,arg2:string):Promise<void>;
 
+export function TerminalLoadScrollback(arg1:string):Promise<string>;
+
 export function TerminalResize(arg1:string,arg2:number,arg3:number):Promise<void>;
+
+export function TerminalSaveScrollback(arg1:string,arg2:string):Promise<void>;
 
 export function TerminalStart(arg1:string,arg2:number,arg3:number,arg4:string):Promise<void>;
 
