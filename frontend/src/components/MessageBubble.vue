@@ -4,9 +4,10 @@ import type { ChatMessage } from '../types/session'
 import { renderMarkdown } from '../utils/markdown'
 import ToolUseBlock from './ToolUseBlock.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   message: ChatMessage
-}>()
+  assistantLabel?: string
+}>(), { assistantLabel: 'Claude' })
 
 const renderedContent = computed(() => renderMarkdown(props.message.content))
 const hasTextContent = computed(() => props.message.content.trim().length > 0)
@@ -53,7 +54,7 @@ const timeStr = computed(() => {
   <div v-else class="assistant-message">
     <div class="text-xs opacity-40 mb-1.5 flex items-center gap-1.5">
       <span class="inline-block w-4 h-4 rounded-full bg-gradient-to-br from-orange-400 to-amber-600 shrink-0"></span>
-      Claude
+      {{ assistantLabel }}
       <time class="ml-1">{{ timeStr }}</time>
     </div>
     <!-- Reasoning ("thinking") for reasoning models -->

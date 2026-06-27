@@ -42,6 +42,13 @@ function denyPermission() {
 
 const profiles = computed(() => effectiveConfig.value.profiles || [])
 
+// Label for assistant messages: the actual model/provider, not always "Claude".
+const assistantLabel = computed(() => {
+  const p = props.tab.provider || 'claude'
+  if (p === 'claude') return 'Claude'
+  return props.tab.model || p.charAt(0).toUpperCase() + p.slice(1)
+})
+
 const emit = defineEmits<{
   command: [action: string]
 }>()
@@ -395,7 +402,7 @@ async function handleCommand(action: string) {
         </div>
       </div>
 
-      <MessageBubble v-for="msg in tab.messages" :key="msg.id" :message="msg" />
+      <MessageBubble v-for="msg in tab.messages" :key="msg.id" :message="msg" :assistant-label="assistantLabel" />
 
       <!-- Inline reply for answering Claude's questions -->
       <InlineReply v-if="showInlineReply" :message="lastAssistantMessage!.content" @send="handleSend" />
