@@ -129,6 +129,7 @@ export interface GlobalConfig {
   enabledProviders: string[]
   defaultModels: Record<string, string>
   disableThinking: boolean
+  customInstructions: string
 }
 
 export interface WindowSession {

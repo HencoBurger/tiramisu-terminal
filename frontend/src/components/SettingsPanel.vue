@@ -24,6 +24,7 @@ const openRouterKeyInput = ref('')
 const hasOpenRouterKey = ref(false)
 const providerError = ref('')
 const localDisableThinking = ref(false)
+const localCustomInstructions = ref('')
 
 // Global defaults
 const localSound = ref('')
@@ -71,6 +72,7 @@ watch(() => props.open, (isOpen) => {
     // Providers
     localOllamaBaseURL.value = globalConfig.value.ollamaBaseURL || 'http://localhost:11434'
     localDisableThinking.value = !!globalConfig.value.disableThinking
+    localCustomInstructions.value = globalConfig.value.customInstructions || ''
     openRouterKeyInput.value = ''
     providerError.value = ''
     hasProviderKey('openrouter').then((v) => (hasOpenRouterKey.value = v)).catch(() => {})
@@ -142,6 +144,7 @@ async function save() {
     enabledProviders: globalConfig.value.enabledProviders,
     defaultModels: globalConfig.value.defaultModels,
     disableThinking: localDisableThinking.value,
+    customInstructions: localCustomInstructions.value,
   })
 
   // Save session overrides
@@ -263,6 +266,23 @@ function close() {
         <p class="text-xs text-base-content/50 ml-9">
           Sends reasoning_effort:none — verbose reasoning models (e.g. gemma) reply directly
           instead of streaming long thoughts that can overflow the context.
+        </p>
+      </div>
+
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text">Agent instructions (preprompt)</span>
+        </label>
+        <textarea
+          v-model="localCustomInstructions"
+          rows="3"
+          placeholder="e.g. Always confirm which file you're working with, understand the codebase first, and never make destructive changes."
+          class="textarea textarea-bordered w-full text-sm"
+        />
+        <p class="text-xs text-base-content/50 mt-1">
+          Appended to the native agent's built-in system prompt (which already says to read
+          files first, understand the codebase, and avoid destructive changes). Add any
+          extra rules here.
         </p>
       </div>
 

@@ -62,6 +62,8 @@ type GlobalConfig struct {
 	// Suppress reasoning-model "thinking" (sends reasoning_effort:none to Ollama) —
 	// gives direct answers and avoids verbose reasoning overflowing the context.
 	DisableThinking bool `json:"disableThinking"`
+	// Extra instructions appended to the native agent's system prompt (editable preprompt).
+	CustomInstructions string `json:"customInstructions"`
 }
 
 // WindowSession holds per-window state.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,11 +19,22 @@ import (
 
 const agentSystemPrompt = `You are a capable coding assistant integrated into the Tiramisu desktop app, working inside the user's project directory.
 
-You have tools: read_file, list_directory, write_file, bash, and delegate. Use them to inspect and modify the project — don't guess file contents, read them. For well-scoped sub-tasks (focused research or a self-contained implementation chunk) prefer delegate, which runs a worker agent autonomously and returns its result, keeping your own context lean.
+You have tools: read_file, list_directory, write_file, bash, and delegate.
 
-Answer in clear Markdown with fenced code blocks. When the task is complete, give a short summary of what you did.`
+Before changing anything:
+- Always confirm exactly which file(s) you are working with — use list_directory and read_file to inspect them rather than guessing their contents.
+- Understand the current codebase first: read the relevant files and how they fit together before proposing or making edits.
 
-const subAgentSystemPrompt = `You are a focused worker agent. Complete the single task you are given using the read_file, list_directory, write_file, and bash tools, then reply with a concise result (what you found or did). Do not ask questions — work autonomously and finish.`
+When changing code:
+- Make the smallest change that solves the task; preserve existing behavior, structure, and style.
+- DO NOT make destructive changes — never delete files or large blocks, overwrite unrelated content, or run destructive shell commands (e.g. rm -rf, git reset --hard) unless the user clearly asked for it.
+- Prefer editing only the specific lines that need to change.
+
+For well-scoped sub-tasks prefer delegate, which runs a worker agent and returns its result, keeping your own context lean.
+
+Answer in clear Markdown with fenced code blocks. When the task is complete, give a short summary of what you changed.`
+
+const subAgentSystemPrompt = `You are a focused worker agent. Complete the single task you are given using read_file, list_directory, write_file, and bash. Read files before editing them, make the smallest necessary change, and never make destructive changes (no deleting files/large blocks or destructive shell commands). Reply with a concise result. Do not ask questions — work autonomously and finish.`
 
 const maxAgentIterations = 24
 
@@ -71,11 +83,21 @@ type AgentSession struct {
 	history     []ChatTurn
 }
 
+// agentSystem returns the base system prompt plus any user-configured custom
+// instructions (the editable "preprompt" from Settings).
+func (a *App) agentSystem() string {
+	s := agentSystemPrompt
+	if ci := strings.TrimSpace(a.globalConfig.CustomInstructions); ci != "" {
+		s += "\n\nAdditional user instructions:\n" + ci
+	}
+	return s
+}
+
 // AgentStart begins a fresh native-provider conversation in a tab.
 func (a *App) AgentStart(tabID, provider, model, workerModel, workDir, prompt string) error {
 	a.stopAgentForTab(tabID)
 	history := []ChatTurn{
-		{Role: "system", Content: agentSystemPrompt},
+		{Role: "system", Content: a.agentSystem()},
 		{Role: "user", Content: prompt},
 	}
 	a.startAgentRun(tabID, provider, model, workerModel, workDir, history)

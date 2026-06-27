@@ -17,6 +17,7 @@ const globalConfig = ref<GlobalConfig>({
   enabledProviders: ['claude', 'ollama', 'openrouter'],
   defaultModels: {},
   disableThinking: false,
+  customInstructions: '',
 })
 
 const windowSession = ref<WindowSession | null>(null)
@@ -45,6 +46,7 @@ export function useConfig() {
         enabledProviders: c.enabledProviders || ['claude', 'ollama', 'openrouter'],
         defaultModels: c.defaultModels || {},
         disableThinking: !!c.disableThinking,
+        customInstructions: c.customInstructions || '',
       }
       document.documentElement.setAttribute('data-theme', effectiveConfig.value.theme)
     } catch (e) {

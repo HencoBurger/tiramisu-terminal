@@ -77,6 +77,7 @@ export namespace main {
 	    enabledProviders: string[];
 	    defaultModels: Record<string, string>;
 	    disableThinking: boolean;
+	    customInstructions: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new GlobalConfig(source);
@@ -92,6 +93,7 @@ export namespace main {
 	        this.enabledProviders = source["enabledProviders"];
 	        this.defaultModels = source["defaultModels"];
 	        this.disableThinking = source["disableThinking"];
+	        this.customInstructions = source["customInstructions"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
