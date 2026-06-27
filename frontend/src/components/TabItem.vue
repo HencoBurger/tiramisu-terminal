@@ -75,6 +75,7 @@ function finishRename() {
     @pointerdown="handlePointerDown"
   >
     <span v-if="tab.type === 'terminal'" class="text-xs opacity-60 font-mono">&gt;_</span>
+    <span v-else-if="tab.type === 'ide'" class="text-xs opacity-60 font-mono">&lt;/&gt;</span>
     <span v-if="tab.activity" class="inline-block w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
     <span v-else-if="tab.status === 'thinking' || tab.status === 'tool_use'" class="inline-block w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
     <span v-else-if="tab.status === 'error'" class="inline-block w-2 h-2 rounded-full bg-error shrink-0" />
