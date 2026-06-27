@@ -16,6 +16,7 @@ type ModelInfo struct {
 // StreamCallbacks receive streaming deltas as a provider response arrives.
 type StreamCallbacks struct {
 	OnText      func(text string)
+	OnReasoning func(text string) // reasoning-model "thinking" deltas
 	OnToolStart func(index int, id, name string)
 	OnToolArgs  func(index int, argsDelta string)
 }
@@ -23,6 +24,7 @@ type StreamCallbacks struct {
 // StreamResult is the assembled outcome of one provider turn.
 type StreamResult struct {
 	Content   string
+	Reasoning string
 	ToolCalls []ToolCall
 	Finish    string
 }

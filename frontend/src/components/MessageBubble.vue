@@ -10,6 +10,15 @@ const props = defineProps<{
 
 const renderedContent = computed(() => renderMarkdown(props.message.content))
 const hasTextContent = computed(() => props.message.content.trim().length > 0)
+const hasReasoning = computed(() => (props.message.reasoning || '').trim().length > 0)
+const renderedReasoning = computed(() => renderMarkdown(props.message.reasoning || ''))
+// A reasoning model with a separate final answer -> collapsible "Thinking" + answer.
+const showThinkingBlock = computed(() => hasReasoning.value && hasTextContent.value)
+// A model that only emits reasoning (e.g. gemma) -> show it as the answer.
+const showReasoningAsAnswer = computed(() => hasReasoning.value && !hasTextContent.value)
+const showNoResponse = computed(() =>
+  !hasTextContent.value && !hasReasoning.value && props.message.toolUse.length === 0 && !props.message.isStreaming,
+)
 const isUser = computed(() => props.message.role === 'user')
 const isSystem = computed(() => props.message.role === 'system')
 const timeStr = computed(() => {
@@ -47,11 +56,24 @@ const timeStr = computed(() => {
       Claude
       <time class="ml-1">{{ timeStr }}</time>
     </div>
+    <!-- Reasoning ("thinking") for reasoning models -->
+    <details v-if="showThinkingBlock" class="text-xs opacity-60 mb-1.5">
+      <summary class="cursor-pointer select-none">Thinking</summary>
+      <div class="assistant-content prose prose-sm prose-invert break-words mt-1 pl-2 border-l border-base-content/20" v-html="renderedReasoning" />
+    </details>
+
     <div
       v-if="hasTextContent"
       class="assistant-content prose prose-sm prose-invert break-words"
       v-html="renderedContent"
     />
+    <div
+      v-else-if="showReasoningAsAnswer"
+      class="assistant-content prose prose-sm prose-invert break-words"
+      v-html="renderedReasoning"
+    />
+    <div v-else-if="showNoResponse" class="text-xs opacity-40 italic">(no response)</div>
+
     <div v-if="message.toolUse.length > 0" class="mt-2 space-y-1.5">
       <ToolUseBlock v-for="tool in message.toolUse" :key="tool.id" :tool="tool" />
     </div>

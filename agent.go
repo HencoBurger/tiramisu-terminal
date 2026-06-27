@@ -203,6 +203,9 @@ func (a *App) agentLoop(ctx context.Context, session *AgentSession, provider, mo
 				OnText: func(t string) {
 					a.safeEmit("agent:event", tabID, AgentEvent{Type: "text_delta", Text: t})
 				},
+				OnReasoning: func(t string) {
+					a.safeEmit("agent:event", tabID, AgentEvent{Type: "reasoning_delta", Text: t})
+				},
 				OnToolStart: func(index int, id, name string) {
 					if id == "" {
 						id = uuid.NewString()
@@ -233,8 +236,15 @@ func (a *App) agentLoop(ctx context.Context, session *AgentSession, provider, mo
 			result.ToolCalls[i].Type = "function"
 		}
 
+		// Reasoning models put their answer in `reasoning` with empty `content`;
+		// keep the conversation coherent by storing reasoning as the turn content
+		// when there's nothing else.
+		turnContent := result.Content
+		if turnContent == "" && len(result.ToolCalls) == 0 && result.Reasoning != "" {
+			turnContent = result.Reasoning
+		}
 		session.mu.Lock()
-		session.history = append(session.history, ChatTurn{Role: "assistant", Content: result.Content, ToolCalls: result.ToolCalls})
+		session.history = append(session.history, ChatTurn{Role: "assistant", Content: turnContent, ToolCalls: result.ToolCalls})
 		session.mu.Unlock()
 
 		if len(result.ToolCalls) == 0 {

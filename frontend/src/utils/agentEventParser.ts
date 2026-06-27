@@ -29,6 +29,7 @@ export function parseAgentEvent(tabId: string, ev: AgentEvent) {
         toolUse: [],
         timestamp: Date.now(),
         isStreaming: true,
+        reasoning: '',
       })
       setTabStatus(tabId, 'thinking')
       break
@@ -39,6 +40,17 @@ export function parseAgentEvent(tabId: string, ev: AgentEvent) {
         updateLastAssistantMessage(tabId, (msg) => {
           msg.content += text
         })
+      }
+      break
+    }
+
+    case 'reasoning_delta': {
+      const text = ev.text
+      if (text) {
+        updateLastAssistantMessage(tabId, (msg) => {
+          msg.reasoning = (msg.reasoning || '') + text
+        })
+        setTabStatus(tabId, 'thinking')
       }
       break
     }

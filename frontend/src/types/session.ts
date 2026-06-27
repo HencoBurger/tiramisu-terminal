@@ -15,6 +15,7 @@ export interface ChatMessage {
   toolUse: ToolUseInfo[]
   timestamp: number
   isStreaming: boolean
+  reasoning?: string // reasoning-model "thinking" output (native runtime)
 }
 
 export interface TabState {

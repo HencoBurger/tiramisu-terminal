@@ -52,6 +52,7 @@ type oaChatChunk struct {
 	Choices []struct {
 		Delta struct {
 			Content   string `json:"content"`
+			Reasoning string `json:"reasoning"`
 			ToolCalls []struct {
 				Index    int    `json:"index"`
 				ID       string `json:"id"`
@@ -114,6 +115,7 @@ func (c *openAICompat) StreamChat(ctx context.Context, model string, messages []
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 
 	var content strings.Builder
+	var reasoning strings.Builder
 	acc := map[int]*ToolCall{}
 	var order []int
 	finish := ""
@@ -142,6 +144,12 @@ func (c *openAICompat) StreamChat(ctx context.Context, model string, messages []
 			content.WriteString(ch.Delta.Content)
 			if cb.OnText != nil {
 				cb.OnText(ch.Delta.Content)
+			}
+		}
+		if ch.Delta.Reasoning != "" {
+			reasoning.WriteString(ch.Delta.Reasoning)
+			if cb.OnReasoning != nil {
+				cb.OnReasoning(ch.Delta.Reasoning)
 			}
 		}
 		for _, tc := range ch.Delta.ToolCalls {
@@ -176,7 +184,7 @@ func (c *openAICompat) StreamChat(ctx context.Context, model string, messages []
 		return StreamResult{}, err
 	}
 
-	res := StreamResult{Content: content.String(), Finish: finish}
+	res := StreamResult{Content: content.String(), Reasoning: reasoning.String(), Finish: finish}
 	for _, idx := range order {
 		res.ToolCalls = append(res.ToolCalls, *acc[idx])
 	}
