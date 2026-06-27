@@ -14,6 +14,14 @@ const selectedOptions = ref<Set<number>>(new Set())
 const selectedQuickActions = ref<Set<number>>(new Set())
 const firstInput = ref<HTMLInputElement>()
 
+// Remove fenced code blocks and inline code so code (e.g. a `cond ? a : b` ternary)
+// is never mistaken for a question/option.
+function stripCode(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`[^`]*`/g, ' ')
+}
+
 function stripMarkdown(text: string): string {
   return text
     .replace(/\*\*(.+?)\*\*/g, '$1')
@@ -75,10 +83,11 @@ function isPermissionRequest(text: string): boolean {
   return false
 }
 
-const questions = computed(() => extractQuestions(props.message))
+const cleanMessage = computed(() => stripCode(props.message))
+const questions = computed(() => extractQuestions(cleanMessage.value))
 // Only show selectable options if the message actually asks a question
-const options = computed(() => questions.value.length > 0 ? extractOptions(props.message) : [])
-const isPermission = computed(() => isPermissionRequest(props.message))
+const options = computed(() => questions.value.length > 0 ? extractOptions(cleanMessage.value) : [])
+const isPermission = computed(() => isPermissionRequest(cleanMessage.value))
 
 const quickActions = computed(() => {
   if (options.value.length > 0) return []
