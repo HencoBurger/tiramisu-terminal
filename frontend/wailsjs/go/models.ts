@@ -207,6 +207,7 @@ export namespace main {
 	    profileId: string;
 	    model: string;
 	    provider?: string;
+	    workerModel?: string;
 	    type: string;
 	    openFiles?: string[];
 	    activeFile?: string;
@@ -225,6 +226,7 @@ export namespace main {
 	        this.profileId = source["profileId"];
 	        this.model = source["model"];
 	        this.provider = source["provider"];
+	        this.workerModel = source["workerModel"];
 	        this.type = source["type"];
 	        this.openFiles = source["openFiles"];
 	        this.activeFile = source["activeFile"];

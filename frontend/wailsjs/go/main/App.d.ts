@@ -4,9 +4,9 @@ import {main} from '../models';
 
 export function AgentPermissionDecision(arg1:string,arg2:boolean):Promise<void>;
 
-export function AgentSend(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
+export function AgentSend(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<void>;
 
-export function AgentStart(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
+export function AgentStart(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<void>;
 
 export function AgentStop(arg1:string):Promise<void>;
 

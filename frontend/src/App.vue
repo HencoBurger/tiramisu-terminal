@@ -121,7 +121,7 @@ function debouncedSaveTabState() {
 
 // Watch tab changes for persistence
 watch(
-  () => tabs.value.map(t => `${t.id}|${t.name}|${t.workDir}|${t.sessionId}|${t.profileId}|${t.model}|${t.provider}|${t.type}|${(t.openFiles ?? []).join('\n')}|${t.activeFile ?? ''}`).join(','),
+  () => tabs.value.map(t => `${t.id}|${t.name}|${t.workDir}|${t.sessionId}|${t.profileId}|${t.model}|${t.provider}|${t.workerModel ?? ''}|${t.type}|${(t.openFiles ?? []).join('\n')}|${t.activeFile ?? ''}`).join(','),
   () => debouncedSaveTabState(),
 )
 

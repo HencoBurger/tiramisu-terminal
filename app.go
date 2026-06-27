@@ -31,6 +31,7 @@ type TabConfig struct {
 	ProfileID     string `json:"profileId"`
 	Model         string `json:"model"`
 	Provider      string `json:"provider,omitempty"`
+	WorkerModel   string `json:"workerModel,omitempty"`
 	Type          string `json:"type"`
 	// IDE tabs: the open file paths and which one was active, for restore.
 	OpenFiles  []string `json:"openFiles,omitempty"`

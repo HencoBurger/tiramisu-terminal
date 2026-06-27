@@ -7,7 +7,7 @@ import { useConfig } from '../composables/useConfig'
 import { useAgent } from '../composables/useAgent'
 
 const props = defineProps<{ tab: TabState }>()
-const { setTabProvider, setTabModel } = useTabs()
+const { setTabProvider, setTabModel, setTabWorkerModel } = useTabs()
 const { globalConfig } = useConfig()
 const { agentStop, listProviderModels } = useAgent()
 
@@ -59,10 +59,15 @@ function onProviderChange(e: Event) {
   agentStop(props.tab.id).catch(() => {})
   setTabProvider(props.tab.id, p === 'claude' ? '' : p)
   setTabModel(props.tab.id, '') // clear; pick a model for the new provider
+  setTabWorkerModel(props.tab.id, '')
 }
 
 function onModelChange(e: Event) {
   setTabModel(props.tab.id, (e.target as HTMLSelectElement).value)
+}
+
+function onWorkerChange(e: Event) {
+  setTabWorkerModel(props.tab.id, (e.target as HTMLSelectElement).value)
 }
 </script>
 
@@ -102,6 +107,20 @@ function onModelChange(e: Event) {
         <option v-for="m in nativeModels" :key="m.id" :value="m.id">{{ m.name }}</option>
       </select>
       <span v-else class="text-error text-xs cursor-help" :title="loadError">⚠ models unavailable</span>
+
+      <!-- Worker (sub-agent) model for the delegate tool -->
+      <template v-if="!loading && !loadError">
+        <span class="text-xs opacity-40">worker</span>
+        <select
+          :value="tab.workerModel || ''"
+          class="select select-ghost select-xs text-xs h-5 min-h-0 pl-1 pr-5 max-w-[12rem]"
+          title="Worker (sub-agent) model used by the delegate tool"
+          @change="onWorkerChange"
+        >
+          <option value="">(same as main)</option>
+          <option v-for="m in nativeModels" :key="m.id" :value="m.id">{{ m.name }}</option>
+        </select>
+      </template>
     </template>
   </div>
 </template>

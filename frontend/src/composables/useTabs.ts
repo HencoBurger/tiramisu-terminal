@@ -35,6 +35,7 @@ export function useTabs() {
       planMode: false,
       model: '',
       provider: '',
+      workerModel: '',
       type,
       activity: false,
       openFiles: [],
@@ -116,6 +117,11 @@ export function useTabs() {
     if (tab) tab.provider = provider
   }
 
+  function setTabWorkerModel(id: string, workerModel: string) {
+    const tab = tabs.value.find(t => t.id === id)
+    if (tab) tab.workerModel = workerModel
+  }
+
   function setTabActivity(id: string, active: boolean) {
     const tab = tabs.value.find(t => t.id === id)
     if (tab) tab.activity = active
@@ -177,6 +183,7 @@ export function useTabs() {
       profileId: t.profileId,
       model: t.model,
       provider: t.provider,
+      workerModel: t.workerModel,
       type: t.type,
       openFiles: t.openFiles,
       activeFile: t.activeFile,
@@ -201,6 +208,7 @@ export function useTabs() {
         planMode: false,
         model: cfg.model || '',
         provider: cfg.provider || '',
+        workerModel: cfg.workerModel || '',
         type: cfg.type || 'chat',
         activity: false,
         openFiles: cfg.openFiles || [],
@@ -231,6 +239,7 @@ export function useTabs() {
     setTabPlanMode,
     setTabModel,
     setTabProvider,
+    setTabWorkerModel,
     setTabActivity,
     setTabOpenFiles,
     setTabInitialCommand,

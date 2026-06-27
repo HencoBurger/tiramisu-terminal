@@ -31,6 +31,8 @@ export interface TabState {
   model: string
   // Chat backend provider: '' / 'claude' = Claude CLI; 'ollama' / 'openrouter' = native runtime.
   provider: string
+  // Native runtime: worker/sub-agent model used by the delegate tool (orchestrator = model).
+  workerModel?: string
   type: TabType
   activity: boolean
   // IDE tabs only: open file paths + active file, for restore across restarts.
@@ -102,6 +104,7 @@ export interface TabConfig {
   profileId: string
   model: string
   provider: string
+  workerModel?: string
   type: TabType
   openFiles?: string[]
   activeFile?: string

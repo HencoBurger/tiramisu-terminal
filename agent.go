@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -12,13 +13,16 @@ import (
 
 // Native provider-agnostic agent runtime. Mirrors session.go's lifecycle shape (a map
 // keyed by tabID + per-session cancel/done), but talks to provider HTTP APIs and runs
-// its own tool-use loop. The Claude path (session.go) is untouched.
+// its own tool-use loop with an orchestrator + worker (sub-agent) split. The Claude
+// path (session.go) is untouched.
 
 const agentSystemPrompt = `You are a capable coding assistant integrated into the Tiramisu desktop app, working inside the user's project directory.
 
-You have tools: read_file, list_directory, write_file, and bash. Use them to inspect and modify the project as needed — don't guess file contents, read them. When you change files, do it with write_file. Prefer small, verifiable steps.
+You have tools: read_file, list_directory, write_file, bash, and delegate. Use them to inspect and modify the project — don't guess file contents, read them. For well-scoped sub-tasks (focused research or a self-contained implementation chunk) prefer delegate, which runs a worker agent autonomously and returns its result, keeping your own context lean.
 
 Answer in clear Markdown with fenced code blocks. When the task is complete, give a short summary of what you did.`
+
+const subAgentSystemPrompt = `You are a focused worker agent. Complete the single task you are given using the read_file, list_directory, write_file, and bash tools, then reply with a concise result (what you found or did). Do not ask questions — work autonomously and finish.`
 
 const maxAgentIterations = 24
 
@@ -53,48 +57,46 @@ type AgentEvent struct {
 	ToolOutput     string `json:"toolOutput,omitempty"`
 	ToolInput      string `json:"toolInput,omitempty"`
 	ReqID          string `json:"reqId,omitempty"`
-	// M2 sub-agents (additive).
-	AgentID  string `json:"agentId,omitempty"`
-	ParentID string `json:"parentId,omitempty"`
 }
 
 type AgentSession struct {
-	TabID    string
-	Provider string
-	Model    string
-	WorkDir  string
-	cancel   context.CancelFunc
-	done     chan struct{}
-	mu       sync.Mutex
-	history  []ChatTurn
+	TabID       string
+	Provider    string
+	Model       string
+	WorkerModel string
+	WorkDir     string
+	cancel      context.CancelFunc
+	done        chan struct{}
+	mu          sync.Mutex
+	history     []ChatTurn
 }
 
 // AgentStart begins a fresh native-provider conversation in a tab.
-func (a *App) AgentStart(tabID, provider, model, workDir, prompt string) error {
+func (a *App) AgentStart(tabID, provider, model, workerModel, workDir, prompt string) error {
 	a.stopAgentForTab(tabID)
 	history := []ChatTurn{
 		{Role: "system", Content: agentSystemPrompt},
 		{Role: "user", Content: prompt},
 	}
-	a.startAgentRun(tabID, provider, model, workDir, history)
+	a.startAgentRun(tabID, provider, model, workerModel, workDir, history)
 	return nil
 }
 
 // AgentSend continues a tab's native conversation. Self-heals to a fresh start if the
 // tab isn't tracked (after an app restart or a provider switch) — never hard-errors.
-func (a *App) AgentSend(tabID, provider, model, workDir, prompt string) error {
+func (a *App) AgentSend(tabID, provider, model, workerModel, workDir, prompt string) error {
 	a.agentMu.RLock()
 	session, ok := a.agentSessions[tabID]
 	a.agentMu.RUnlock()
 	if !ok {
-		return a.AgentStart(tabID, provider, model, workDir, prompt)
+		return a.AgentStart(tabID, provider, model, workerModel, workDir, prompt)
 	}
 
 	a.stopAgentForTab(tabID)
 	session.mu.Lock()
 	history := append(append([]ChatTurn{}, session.history...), ChatTurn{Role: "user", Content: prompt})
 	session.mu.Unlock()
-	a.startAgentRun(tabID, provider, model, workDir, history)
+	a.startAgentRun(tabID, provider, model, workerModel, workDir, history)
 	return nil
 }
 
@@ -104,16 +106,17 @@ func (a *App) AgentStop(tabID string) error {
 	return nil
 }
 
-func (a *App) startAgentRun(tabID, provider, model, workDir string, history []ChatTurn) {
+func (a *App) startAgentRun(tabID, provider, model, workerModel, workDir string, history []ChatTurn) {
 	ctx, cancel := context.WithCancel(context.Background())
 	session := &AgentSession{
-		TabID:    tabID,
-		Provider: provider,
-		Model:    model,
-		WorkDir:  workDir,
-		cancel:   cancel,
-		done:     make(chan struct{}),
-		history:  history,
+		TabID:       tabID,
+		Provider:    provider,
+		Model:       model,
+		WorkerModel: workerModel,
+		WorkDir:     workDir,
+		cancel:      cancel,
+		done:        make(chan struct{}),
+		history:     history,
 	}
 	a.agentMu.Lock()
 	a.agentSessions[tabID] = session
@@ -146,7 +149,9 @@ func (a *App) stopAgent(session *AgentSession) {
 
 func (a *App) runAgent(ctx context.Context, session *AgentSession) {
 	defer close(session.done)
-	err := a.agentLoop(ctx, session, session.Provider, session.Model, defaultTools())
+	// Orchestrator tools = the base tools + delegate (sub-agent).
+	tools := append(defaultTools(), a.delegateTool(session))
+	err := a.agentLoop(ctx, session, session.Provider, session.Model, tools, true)
 
 	tabID := session.TabID
 	switch {
@@ -162,8 +167,8 @@ func (a *App) runAgent(ctx context.Context, session *AgentSession) {
 }
 
 // agentLoop drives one model→tools→model cycle until the model stops calling tools.
-// Returns nil on a clean finish, or an error. Appends turns to session.history.
-func (a *App) agentLoop(ctx context.Context, session *AgentSession, provider, model string, tools []Tool) error {
+// When emit is true it streams agent:event updates to the tab; sub-agents run silent.
+func (a *App) agentLoop(ctx context.Context, session *AgentSession, provider, model string, tools []Tool, emit bool) error {
 	tabID := session.TabID
 	prov, err := a.providerFor(provider)
 	if err != nil {
@@ -174,32 +179,36 @@ func (a *App) agentLoop(ctx context.Context, session *AgentSession, provider, mo
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		a.safeEmit("agent:event", tabID, AgentEvent{Type: "message_start"})
 
-		emittedTool := map[int]string{} // delta index -> emitted toolId
-		cb := StreamCallbacks{
-			OnText: func(t string) {
-				a.safeEmit("agent:event", tabID, AgentEvent{Type: "text_delta", Text: t})
-			},
-			OnToolStart: func(index int, id, name string) {
-				if id == "" {
-					id = uuid.NewString()
-				}
-				emittedTool[index] = id
-				a.safeEmit("agent:event", tabID, AgentEvent{Type: "tool_use_start", ToolID: id, ToolName: name})
-			},
-			OnToolArgs: func(index int, delta string) {
-				a.safeEmit("agent:event", tabID, AgentEvent{Type: "tool_input_delta", ToolID: emittedTool[index], ToolInputDelta: delta})
-			},
+		var cb StreamCallbacks
+		emittedTool := map[int]string{}
+		if emit {
+			a.safeEmit("agent:event", tabID, AgentEvent{Type: "message_start"})
+			cb = StreamCallbacks{
+				OnText: func(t string) {
+					a.safeEmit("agent:event", tabID, AgentEvent{Type: "text_delta", Text: t})
+				},
+				OnToolStart: func(index int, id, name string) {
+					if id == "" {
+						id = uuid.NewString()
+					}
+					emittedTool[index] = id
+					a.safeEmit("agent:event", tabID, AgentEvent{Type: "tool_use_start", ToolID: id, ToolName: name})
+				},
+				OnToolArgs: func(index int, delta string) {
+					a.safeEmit("agent:event", tabID, AgentEvent{Type: "tool_input_delta", ToolID: emittedTool[index], ToolInputDelta: delta})
+				},
+			}
 		}
 
 		result, serr := prov.StreamChat(ctx, model, session.history, tools, cb)
 		if serr != nil {
 			return serr
 		}
-		a.safeEmit("agent:event", tabID, AgentEvent{Type: "message_stop"})
+		if emit {
+			a.safeEmit("agent:event", tabID, AgentEvent{Type: "message_stop"})
+		}
 
-		// Normalize tool-call IDs to the ones we surfaced to the UI.
 		for i := range result.ToolCalls {
 			if id, ok := emittedTool[i]; ok && id != "" {
 				result.ToolCalls[i].ID = id
@@ -214,7 +223,7 @@ func (a *App) agentLoop(ctx context.Context, session *AgentSession, provider, mo
 		session.mu.Unlock()
 
 		if len(result.ToolCalls) == 0 {
-			return nil // model produced a final answer
+			return nil
 		}
 
 		for _, tc := range result.ToolCalls {
@@ -222,7 +231,9 @@ func (a *App) agentLoop(ctx context.Context, session *AgentSession, provider, mo
 				return ctx.Err()
 			}
 			out := a.executeTool(ctx, session, tools, tc)
-			a.safeEmit("agent:event", tabID, AgentEvent{Type: "tool_result", ToolID: tc.ID, ToolOutput: out})
+			if emit {
+				a.safeEmit("agent:event", tabID, AgentEvent{Type: "tool_result", ToolID: tc.ID, ToolOutput: out})
+			}
 			session.mu.Lock()
 			session.history = append(session.history, ChatTurn{Role: "tool", Content: out, ToolCallID: tc.ID})
 			session.mu.Unlock()
@@ -256,6 +267,62 @@ func (a *App) executeTool(ctx context.Context, session *AgentSession, tools []To
 	return out
 }
 
+// delegateTool lets the orchestrator hand a self-contained sub-task to a worker agent
+// running on the (possibly cheaper) worker model. The sub-agent runs silently and
+// returns its final result as the tool output.
+func (a *App) delegateTool(session *AgentSession) Tool {
+	return Tool{
+		Name:        "delegate",
+		Description: "Delegate a self-contained sub-task to a worker agent (runs on a separate, possibly cheaper model). Provide a complete task description; the worker runs autonomously with file and bash tools and returns its result. Use for well-scoped research or implementation chunks to keep your own context lean.",
+		Parameters: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"task": map[string]interface{}{"type": "string", "description": "A complete, self-contained description of the sub-task."},
+			},
+			"required": []string{"task"},
+		},
+		Run: func(ctx context.Context, workDir string, args map[string]interface{}) (string, error) {
+			task := argString(args, "task")
+			if task == "" {
+				return "", fmt.Errorf("delegate requires a 'task'")
+			}
+			return a.runSubAgent(ctx, session, task)
+		},
+	}
+}
+
+// runSubAgent runs a worker agent to completion on the worker model and returns its
+// final text. It uses the base tools (no further delegation) and shares the tab's
+// permission gate, so its file/shell mutations still prompt the user.
+func (a *App) runSubAgent(ctx context.Context, session *AgentSession, task string) (string, error) {
+	model := session.WorkerModel
+	if model == "" {
+		model = session.Model
+	}
+	sub := &AgentSession{
+		TabID:    session.TabID,
+		Provider: session.Provider,
+		Model:    model,
+		WorkDir:  session.WorkDir,
+		history: []ChatTurn{
+			{Role: "system", Content: subAgentSystemPrompt},
+			{Role: "user", Content: task},
+		},
+	}
+	if err := a.agentLoop(ctx, sub, session.Provider, model, defaultTools(), false); err != nil {
+		return "", err
+	}
+	// The last assistant turn holds the worker's final answer.
+	sub.mu.Lock()
+	defer sub.mu.Unlock()
+	for i := len(sub.history) - 1; i >= 0; i-- {
+		if sub.history[i].Role == "assistant" && sub.history[i].Content != "" {
+			return sub.history[i].Content, nil
+		}
+	}
+	return "(worker produced no output)", nil
+}
+
 // checkPermission returns whether a tool call may proceed, blocking for an interactive
 // decision when the permission mode requires it.
 func (a *App) checkPermission(ctx context.Context, session *AgentSession, tool *Tool, argsJSON string) bool {
@@ -266,7 +333,7 @@ func (a *App) checkPermission(ctx context.Context, session *AgentSession, tool *
 	case "bypassPermissions":
 		return true
 	case "acceptEdits":
-		if tool.Name != "bash" { // auto-approve file edits, still gate shell commands
+		if tool.Name != "bash" {
 			return true
 		}
 	}

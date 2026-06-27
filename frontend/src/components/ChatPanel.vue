@@ -130,10 +130,11 @@ async function handleSend(text: string) {
     setTabStatus(props.tab.id, 'thinking')
     const hasAssistant = props.tab.messages.some(m => m.role === 'assistant')
     try {
+      const worker = props.tab.workerModel || ''
       if (hasAssistant) {
-        await agentSend(props.tab.id, provider, props.tab.model, props.tab.workDir, promptToSend)
+        await agentSend(props.tab.id, provider, props.tab.model, worker, props.tab.workDir, promptToSend)
       } else {
-        await agentStart(props.tab.id, provider, props.tab.model, props.tab.workDir, promptToSend)
+        await agentStart(props.tab.id, provider, props.tab.model, worker, props.tab.workDir, promptToSend)
       }
     } catch (e: any) {
       error.value = e?.message || String(e)
