@@ -164,7 +164,10 @@ function copySelection() {
 function pasteClipboard() {
   ClipboardGetText().then((text) => {
     if (text) {
-      const encoded = btoa(text)
+      // Encode the UTF-8 bytes so non-Latin1 characters (curly quotes, em-dashes,
+      // emoji, etc.) survive — btoa() on the raw string throws on any code point
+      // above 0xFF, which would silently drop the whole paste.
+      const encoded = bytesToBase64(new TextEncoder().encode(text))
       TerminalInput(props.tab.id, encoded).catch(() => {})
     } else {
       // No text in clipboard (e.g. an image) — forward a literal Ctrl+V so the
