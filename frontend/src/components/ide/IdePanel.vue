@@ -10,6 +10,8 @@ import EditorPane from './EditorPane.vue'
 import MarkdownPreview from './MarkdownPreview.vue'
 import { guessLanguage } from './language'
 import { getFileIconUrl } from './fileIcons'
+import { computeRunActions, type RunAction } from './run'
+import { resetDetectCache } from './run/detect'
 
 interface FileEntry {
   name: string
@@ -27,7 +29,7 @@ const props = defineProps<{
   tab: TabState
 }>()
 
-const { activeTabId, setTabWorkDir, setTabOpenFiles } = useTabs()
+const { activeTabId, setTabWorkDir, setTabOpenFiles, addTab, setTabInitialCommand } = useTabs()
 const { maybeSetDefaultWorkDir } = useConfig()
 
 const rootEntries = ref<FileEntry[]>([])
@@ -47,6 +49,44 @@ const mdView = ref<'code' | 'split' | 'preview'>('preview')
 const isMarkdown = computed(() => activeLanguage.value === 'markdown')
 const showEditor = computed(() => !isMarkdown.value || mdView.value !== 'preview')
 const showPreview = computed(() => isMarkdown.value && mdView.value !== 'code')
+
+// Gutter run actions for the active file (package.json scripts in v1; the run/
+// registry makes any language a one-file add-on).
+const runActions = ref<RunAction[]>([])
+let runSeq = 0
+let runDebounce: ReturnType<typeof setTimeout> | null = null
+
+async function recomputeRunActions() {
+  const path = activePath.value
+  if (!path) {
+    runActions.value = []
+    return
+  }
+  const seq = ++runSeq
+  resetDetectCache()
+  const actions = await computeRunActions({
+    path,
+    fileName: path.split(/[\\/]/).pop() ?? path,
+    dir: path.replace(/[\\/][^\\/]+$/, '') || props.tab.workDir,
+    content: activeContent.value,
+    language: activeLanguage.value,
+    workDir: props.tab.workDir,
+    listDir: ListDirectory,
+  })
+  if (seq === runSeq) runActions.value = actions // ignore stale async results
+}
+
+// Recompute immediately on file switch; debounce on content edits.
+watch(activePath, recomputeRunActions, { immediate: true })
+watch(activeContent, () => {
+  if (runDebounce) clearTimeout(runDebounce)
+  runDebounce = setTimeout(recomputeRunActions, 300)
+})
+
+function handleRunAction(action: RunAction) {
+  const tab = addTab(action.cwd, '▶ ' + action.label, 'terminal')
+  setTabInitialCommand(tab.id, action.command)
+}
 
 async function loadRoot() {
   if (!props.tab.workDir) return
@@ -237,8 +277,10 @@ onMounted(async () => {
               class="h-full"
               :active-path="activePath"
               :content="activeContent"
+              :run-actions="runActions"
               @update:content="updateContent"
               @save="saveFile"
+              @run-action="handleRunAction"
             />
           </div>
           <MarkdownPreview

@@ -123,6 +123,11 @@ export function useTabs() {
     }
   }
 
+  function setTabInitialCommand(id: string, command: string) {
+    const tab = tabs.value.find(t => t.id === id)
+    if (tab) tab.initialCommand = command
+  }
+
   function addMessage(tabId: string, msg: Omit<ChatMessage, 'id'>): ChatMessage {
     const tab = tabs.value.find(t => t.id === tabId)
     if (!tab) throw new Error(`Tab ${tabId} not found`)
@@ -219,6 +224,7 @@ export function useTabs() {
     setTabModel,
     setTabActivity,
     setTabOpenFiles,
+    setTabInitialCommand,
     addMessage,
     updateLastAssistantMessage,
     setTabCost,

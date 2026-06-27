@@ -82,9 +82,20 @@ async function startTerminal() {
     }
   } catch {}
 
-  TerminalStart(props.tab.id, cols, rows, props.tab.workDir).catch((err: any) => {
-    console.error('Failed to start terminal:', err)
-  })
+  TerminalStart(props.tab.id, cols, rows, props.tab.workDir)
+    .then(() => {
+      // Auto-run a one-shot command (e.g. an IDE "run script" action). Consume it
+      // once so it never replays; the PTY buffers input, so timing is safe.
+      const cmd = props.tab.initialCommand
+      if (cmd) {
+        props.tab.initialCommand = ''
+        const encoded = bytesToBase64(new TextEncoder().encode(cmd + '\n'))
+        TerminalInput(props.tab.id, encoded).catch(() => {})
+      }
+    })
+    .catch((err: any) => {
+      console.error('Failed to start terminal:', err)
+    })
 
   terminal.onData((data: string) => {
     const encoded = btoa(data)

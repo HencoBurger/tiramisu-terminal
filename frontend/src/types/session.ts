@@ -34,6 +34,9 @@ export interface TabState {
   // IDE tabs only: open file paths + active file, for restore across restarts.
   openFiles?: string[]
   activeFile?: string
+  // Terminal tabs: a command to run once when the PTY starts. Transient — never
+  // persisted to TabConfig, so a "run" never replays on restart.
+  initialCommand?: string
 }
 
 export interface ClaudeStreamEvent {
