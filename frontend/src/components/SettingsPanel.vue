@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { useConfig } from '../composables/useConfig'
 import { useSound } from '../composables/useSound'
+import { useAgent } from '../composables/useAgent'
 import type { Profile } from '../types/session'
 import { OpenDirectoryDialog } from '../../wailsjs/go/main/App'
 
@@ -15,6 +16,13 @@ const emit = defineEmits<{
 
 const { globalConfig, windowSession, effectiveConfig, saveGlobalConfig, saveWindowSession } = useConfig()
 const { SOUNDS, play } = useSound()
+const { setProviderKey, hasProviderKey, deleteProviderKey } = useAgent()
+
+// Providers
+const localOllamaBaseURL = ref('')
+const openRouterKeyInput = ref('')
+const hasOpenRouterKey = ref(false)
+const providerError = ref('')
 
 // Global defaults
 const localSound = ref('')
@@ -58,8 +66,36 @@ watch(() => props.open, (isOpen) => {
     localSessionTheme.value = ws?.themeOverride || localTheme.value
     localSessionSound.value = ws?.soundOverride || localSound.value
     localSessionPermMode.value = ws?.permModeOverride || localPermMode.value
+
+    // Providers
+    localOllamaBaseURL.value = globalConfig.value.ollamaBaseURL || 'http://localhost:11434'
+    openRouterKeyInput.value = ''
+    providerError.value = ''
+    hasProviderKey('openrouter').then((v) => (hasOpenRouterKey.value = v)).catch(() => {})
   }
 })
+
+async function saveOpenRouterKey() {
+  const key = openRouterKeyInput.value.trim()
+  if (!key) return
+  providerError.value = ''
+  try {
+    await setProviderKey('openrouter', key)
+    hasOpenRouterKey.value = true
+    openRouterKeyInput.value = ''
+  } catch (e: any) {
+    providerError.value = e?.message || String(e)
+  }
+}
+
+async function clearOpenRouterKey() {
+  try {
+    await deleteProviderKey('openrouter')
+    hasOpenRouterKey.value = false
+  } catch {
+    // ignore
+  }
+}
 
 const soundError = ref('')
 async function previewSound(name: string) {
@@ -100,6 +136,9 @@ async function save() {
     theme: localTheme.value,
     permissionMode: localPermMode.value,
     profiles: localProfiles.value,
+    ollamaBaseURL: localOllamaBaseURL.value.trim() || 'http://localhost:11434',
+    enabledProviders: globalConfig.value.enabledProviders,
+    defaultModels: globalConfig.value.defaultModels,
   })
 
   // Save session overrides
@@ -170,6 +209,47 @@ function close() {
         <select v-model="localTheme" class="select select-bordered">
           <option v-for="t in themes" :key="t" :value="t">{{ t }}</option>
         </select>
+      </div>
+
+      <!-- Providers (native chat: Ollama / OpenRouter) -->
+      <div class="divider text-sm font-semibold">Chat Providers</div>
+
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text">Ollama base URL</span>
+        </label>
+        <input
+          v-model="localOllamaBaseURL"
+          type="text"
+          placeholder="http://localhost:11434"
+          class="input input-bordered"
+        />
+      </div>
+
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text">OpenRouter API key</span>
+          <span v-if="hasOpenRouterKey" class="label-text-alt text-success">Key set ✓</span>
+        </label>
+        <div class="flex gap-2">
+          <input
+            v-model="openRouterKeyInput"
+            type="password"
+            :placeholder="hasOpenRouterKey ? '•••••••• (stored)' : 'sk-or-...'"
+            class="input input-bordered flex-1"
+            autocomplete="off"
+          />
+          <button class="btn btn-outline btn-sm" :disabled="!openRouterKeyInput.trim()" @click="saveOpenRouterKey">
+            Save key
+          </button>
+          <button v-if="hasOpenRouterKey" class="btn btn-ghost btn-sm" @click="clearOpenRouterKey">
+            Clear
+          </button>
+        </div>
+        <p v-if="providerError" class="text-error text-xs mt-1">{{ providerError }}</p>
+        <p class="text-xs text-base-content/50 mt-1">
+          The key is stored locally in ~/.tiramisu/secrets.json (0600) and never leaves the backend.
+        </p>
       </div>
 
       <!-- Session overrides -->

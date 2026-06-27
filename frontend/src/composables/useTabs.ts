@@ -34,6 +34,7 @@ export function useTabs() {
       profileId: '',
       planMode: false,
       model: '',
+      provider: '',
       type,
       activity: false,
       openFiles: [],
@@ -110,6 +111,11 @@ export function useTabs() {
     if (tab) tab.model = model
   }
 
+  function setTabProvider(id: string, provider: string) {
+    const tab = tabs.value.find(t => t.id === id)
+    if (tab) tab.provider = provider
+  }
+
   function setTabActivity(id: string, active: boolean) {
     const tab = tabs.value.find(t => t.id === id)
     if (tab) tab.activity = active
@@ -170,6 +176,7 @@ export function useTabs() {
       soundOverride: t.soundOverride,
       profileId: t.profileId,
       model: t.model,
+      provider: t.provider,
       type: t.type,
       openFiles: t.openFiles,
       activeFile: t.activeFile,
@@ -193,6 +200,7 @@ export function useTabs() {
         profileId: cfg.profileId || '',
         planMode: false,
         model: cfg.model || '',
+        provider: cfg.provider || '',
         type: cfg.type || 'chat',
         activity: false,
         openFiles: cfg.openFiles || [],
@@ -222,6 +230,7 @@ export function useTabs() {
     setTabProfile,
     setTabPlanMode,
     setTabModel,
+    setTabProvider,
     setTabActivity,
     setTabOpenFiles,
     setTabInitialCommand,

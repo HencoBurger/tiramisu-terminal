@@ -4,12 +4,14 @@ import type { TabState } from '../types/session'
 import { useSession } from '../composables/useSession'
 import { useTabs } from '../composables/useTabs'
 import { useConfig } from '../composables/useConfig'
+import { useAgent } from '../composables/useAgent'
 import { slashCommands } from '../types/slashCommands'
 import { RunGitDiff } from '../../wailsjs/go/main/App'
 import MessageBubble from './MessageBubble.vue'
 import InlineReply from './InlineReply.vue'
 import InputBar from './InputBar.vue'
 import WorkDirPicker from './WorkDirPicker.vue'
+import ProviderModelPicker from './ProviderModelPicker.vue'
 
 const props = defineProps<{
   tab: TabState
@@ -18,6 +20,7 @@ const props = defineProps<{
 const { startSession, sendMessage, resumeSession, stopSession } = useSession()
 const { addMessage, setTabStatus, setTabWorkDir, setTabProfile, setTabPlanMode, setTabModel, autoNameTab, renameTab } = useTabs()
 const { effectiveConfig, maybeSetDefaultWorkDir } = useConfig()
+const { agentStart, agentSend, agentStop } = useAgent()
 
 const profiles = computed(() => effectiveConfig.value.profiles || [])
 
@@ -103,6 +106,24 @@ async function handleSend(text: string) {
     promptToSend = `Before taking any action, first create a detailed plan. Outline what files you'll change, what approach you'll take, and any risks. Present the plan and ask for confirmation before proceeding. Do NOT make any edits or tool calls until the plan is approved.\n\nUser's request:\n${text}`
   }
 
+  // Native providers (Ollama/OpenRouter) go through the agent runtime, not Claude CLI.
+  const provider = props.tab.provider || 'claude'
+  if (provider !== 'claude') {
+    setTabStatus(props.tab.id, 'thinking')
+    const hasAssistant = props.tab.messages.some(m => m.role === 'assistant')
+    try {
+      if (hasAssistant) {
+        await agentSend(props.tab.id, provider, props.tab.model, props.tab.workDir, promptToSend)
+      } else {
+        await agentStart(props.tab.id, provider, props.tab.model, props.tab.workDir, promptToSend)
+      }
+    } catch (e: any) {
+      error.value = e?.message || String(e)
+      setTabStatus(props.tab.id, 'error')
+    }
+    return
+  }
+
   const model = props.tab.model
 
   try {
@@ -158,9 +179,11 @@ async function handleCommand(action: string) {
   switch (action) {
     case 'clear':
       props.tab.messages.splice(0)
+      if ((props.tab.provider || 'claude') !== 'claude') agentStop(props.tab.id).catch(() => {})
       break
     case 'stop':
-      stopSession(props.tab.id).catch(() => {})
+      if ((props.tab.provider || 'claude') === 'claude') stopSession(props.tab.id).catch(() => {})
+      else agentStop(props.tab.id).catch(() => {})
       break
     case 'workdir':
       showWorkDirPicker.value = true
@@ -322,7 +345,7 @@ async function handleCommand(action: string) {
         :class="tab.planMode ? 'btn-warning' : 'btn-ghost'"
         @click="handleCommand('plan')"
       >Plan Mode</button>
-      <span v-if="tab.model" class="badge badge-accent badge-sm">{{ tab.model }}</span>
+      <ProviderModelPicker :tab="tab" />
       <select
         v-if="profiles.length > 0"
         :value="tab.profileId"

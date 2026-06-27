@@ -73,6 +73,9 @@ export namespace main {
 	    theme: string;
 	    permissionMode: string;
 	    profiles: Profile[];
+	    ollamaBaseURL: string;
+	    enabledProviders: string[];
+	    defaultModels: Record<string, string>;
 	
 	    static createFrom(source: any = {}) {
 	        return new GlobalConfig(source);
@@ -84,6 +87,9 @@ export namespace main {
 	        this.theme = source["theme"];
 	        this.permissionMode = source["permissionMode"];
 	        this.profiles = this.convertValues(source["profiles"], Profile);
+	        this.ollamaBaseURL = source["ollamaBaseURL"];
+	        this.enabledProviders = source["enabledProviders"];
+	        this.defaultModels = source["defaultModels"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -157,6 +163,20 @@ export namespace main {
 		}
 	}
 	
+	export class ModelInfo {
+	    id: string;
+	    name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	    }
+	}
 	
 	export class StoredSession {
 	    sessionId: string;
@@ -186,6 +206,7 @@ export namespace main {
 	    soundOverride: string;
 	    profileId: string;
 	    model: string;
+	    provider?: string;
 	    type: string;
 	    openFiles?: string[];
 	    activeFile?: string;
@@ -203,6 +224,7 @@ export namespace main {
 	        this.soundOverride = source["soundOverride"];
 	        this.profileId = source["profileId"];
 	        this.model = source["model"];
+	        this.provider = source["provider"];
 	        this.type = source["type"];
 	        this.openFiles = source["openFiles"];
 	        this.activeFile = source["activeFile"];

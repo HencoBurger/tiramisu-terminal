@@ -30,6 +30,7 @@ type TabConfig struct {
 	SoundOverride string `json:"soundOverride"`
 	ProfileID     string `json:"profileId"`
 	Model         string `json:"model"`
+	Provider      string `json:"provider,omitempty"`
 	Type          string `json:"type"`
 	// IDE tabs: the open file paths and which one was active, for restore.
 	OpenFiles  []string `json:"openFiles,omitempty"`
@@ -52,6 +53,11 @@ type GlobalConfig struct {
 	Theme          string    `json:"theme"`
 	PermissionMode string    `json:"permissionMode"`
 	Profiles       []Profile `json:"profiles"`
+	// Provider settings for the native chat runtime. The OpenRouter API key is NOT
+	// here — it lives in secrets.json (see secrets.go).
+	OllamaBaseURL    string            `json:"ollamaBaseURL"`
+	EnabledProviders []string          `json:"enabledProviders"`
+	DefaultModels    map[string]string `json:"defaultModels"`
 }
 
 // WindowSession holds per-window state.
@@ -87,6 +93,8 @@ type App struct {
 	ctx              context.Context
 	sessions         map[string]*ClaudeSession
 	sessMu           sync.RWMutex
+	agentSessions    map[string]*AgentSession
+	agentMu          sync.RWMutex
 	terminals        map[string]*PTYSession
 	termMu           sync.RWMutex
 	globalConfig     GlobalConfig
@@ -98,8 +106,9 @@ type App struct {
 
 func NewApp() *App {
 	return &App{
-		sessions:  make(map[string]*ClaudeSession),
-		terminals: make(map[string]*PTYSession),
+		sessions:      make(map[string]*ClaudeSession),
+		agentSessions: make(map[string]*AgentSession),
+		terminals:     make(map[string]*PTYSession),
 	}
 }
 
@@ -184,6 +193,18 @@ func (a *App) shutdown(ctx context.Context) {
 		a.stopSession(s)
 	}
 
+	a.agentMu.Lock()
+	agents := make([]*AgentSession, 0, len(a.agentSessions))
+	for _, s := range a.agentSessions {
+		agents = append(agents, s)
+	}
+	a.agentSessions = make(map[string]*AgentSession)
+	a.agentMu.Unlock()
+
+	for _, s := range agents {
+		a.stopAgent(s)
+	}
+
 	a.termMu.Lock()
 	terminals := make([]*PTYSession, 0, len(a.terminals))
 	for _, t := range a.terminals {
@@ -237,8 +258,9 @@ func (a *App) loadGlobalConfig() {
 	data, err := os.ReadFile(a.globalConfigPath)
 	if err != nil {
 		a.globalConfig = GlobalConfig{
-			DefaultSound: "ding",
-			Theme:        "dark",
+			DefaultSound:  "ding",
+			Theme:         "dark",
+			OllamaBaseURL: defaultOllamaBaseURL,
 		}
 		return
 	}
@@ -248,6 +270,9 @@ func (a *App) loadGlobalConfig() {
 	}
 	if a.globalConfig.Theme == "" {
 		a.globalConfig.Theme = "dark"
+	}
+	if a.globalConfig.OllamaBaseURL == "" {
+		a.globalConfig.OllamaBaseURL = defaultOllamaBaseURL
 	}
 }
 

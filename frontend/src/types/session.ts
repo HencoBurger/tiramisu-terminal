@@ -29,6 +29,8 @@ export interface TabState {
   profileId: string
   planMode: boolean
   model: string
+  // Chat backend provider: '' / 'claude' = Claude CLI; 'ollama' / 'openrouter' = native runtime.
+  provider: string
   type: TabType
   activity: boolean
   // IDE tabs only: open file paths + active file, for restore across restarts.
@@ -99,6 +101,7 @@ export interface TabConfig {
   soundOverride: string
   profileId: string
   model: string
+  provider: string
   type: TabType
   openFiles?: string[]
   activeFile?: string
@@ -118,6 +121,9 @@ export interface GlobalConfig {
   theme: string
   permissionMode: string
   profiles: Profile[]
+  ollamaBaseURL: string
+  enabledProviders: string[]
+  defaultModels: Record<string, string>
 }
 
 export interface WindowSession {

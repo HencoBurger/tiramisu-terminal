@@ -13,6 +13,9 @@ const globalConfig = ref<GlobalConfig>({
   theme: 'dark',
   permissionMode: 'default',
   profiles: [],
+  ollamaBaseURL: 'http://localhost:11434',
+  enabledProviders: ['claude', 'ollama', 'openrouter'],
+  defaultModels: {},
 })
 
 const windowSession = ref<WindowSession | null>(null)
@@ -37,6 +40,9 @@ export function useConfig() {
         theme: c.theme || 'dark',
         permissionMode: c.permissionMode || 'default',
         profiles: c.profiles || [],
+        ollamaBaseURL: c.ollamaBaseURL || 'http://localhost:11434',
+        enabledProviders: c.enabledProviders || ['claude', 'ollama', 'openrouter'],
+        defaultModels: c.defaultModels || {},
       }
       document.documentElement.setAttribute('data-theme', effectiveConfig.value.theme)
     } catch (e) {

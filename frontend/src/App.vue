@@ -14,6 +14,7 @@ import { useTabs } from './composables/useTabs'
 import { useConfig } from './composables/useConfig'
 import { useSound } from './composables/useSound'
 import { parseSessionEvent } from './utils/eventParser'
+import { parseAgentEvent } from './utils/agentEventParser'
 import type { StoredSession } from './types/session'
 import TabBar from './components/TabBar.vue'
 import ChatPanel from './components/ChatPanel.vue'
@@ -120,7 +121,7 @@ function debouncedSaveTabState() {
 
 // Watch tab changes for persistence
 watch(
-  () => tabs.value.map(t => `${t.id}|${t.name}|${t.workDir}|${t.sessionId}|${t.profileId}|${t.model}|${t.type}|${(t.openFiles ?? []).join('\n')}|${t.activeFile ?? ''}`).join(','),
+  () => tabs.value.map(t => `${t.id}|${t.name}|${t.workDir}|${t.sessionId}|${t.profileId}|${t.model}|${t.provider}|${t.type}|${(t.openFiles ?? []).join('\n')}|${t.activeFile ?? ''}`).join(','),
   () => debouncedSaveTabState(),
 )
 
@@ -153,10 +154,17 @@ onMounted(async () => {
     }
 
     const ok = exitCode === 0
+    const who = tab.provider ? tab.provider.charAt(0).toUpperCase() + tab.provider.slice(1) : 'Claude'
     Notify(
-      ok ? 'Claude — task complete' : 'Claude — task failed',
+      ok ? `${who} — task complete` : `${who} — task failed`,
       tab.name || 'Session',
     ).catch(() => {})
+  })
+
+  // Native chat runtime stream (Ollama/OpenRouter). Completion reuses session:done.
+  EventsOn('agent:event', (tabId: string, ev: any) => {
+    debugLogs.value.push(JSON.stringify(ev))
+    parseAgentEvent(tabId, ev)
   })
 
   // Keyboard shortcuts
@@ -166,6 +174,7 @@ onMounted(async () => {
 onUnmounted(() => {
   EventsOff('session:event')
   EventsOff('session:done')
+  EventsOff('agent:event')
   document.removeEventListener('keydown', handleKeydown)
 })
 
@@ -189,7 +198,12 @@ async function handleSessionSelect(id: string) {
     if (loaded.tabs && loaded.tabs.length > 0) {
       restoreTabs(loaded.tabs as any)
       for (const tabCfg of loaded.tabs) {
-        if (tabCfg.sessionId && tabCfg.workDir && (tabCfg.type || 'chat') === 'chat') {
+        if (
+          tabCfg.sessionId &&
+          tabCfg.workDir &&
+          (tabCfg.type || 'chat') === 'chat' &&
+          (tabCfg.provider || 'claude') === 'claude'
+        ) {
           loadTabHistory(tabCfg.id, tabCfg.sessionId, tabCfg.workDir)
         }
       }
