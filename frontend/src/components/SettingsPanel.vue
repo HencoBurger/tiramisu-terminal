@@ -61,8 +61,11 @@ watch(() => props.open, (isOpen) => {
   }
 })
 
-function previewSound(name: string) {
-  play(name)
+const soundError = ref('')
+async function previewSound(name: string) {
+  soundError.value = ''
+  const err = await play(name)
+  if (err) soundError.value = `${err.name}: ${err.message}`
 }
 
 async function browseHomeDir() {
@@ -157,6 +160,7 @@ function close() {
             Preview
           </button>
         </div>
+        <p v-if="soundError" class="text-error text-xs mt-1">Sound error — {{ soundError }}</p>
       </div>
 
       <div class="form-control mb-4">

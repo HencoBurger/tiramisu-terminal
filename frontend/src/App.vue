@@ -8,6 +8,7 @@ import {
   NewWindow,
   CreateWindowSession,
   LoadWindowSession,
+  Notify,
 } from '../wailsjs/go/main/App'
 import { useTabs } from './composables/useTabs'
 import { useConfig } from './composables/useConfig'
@@ -141,10 +142,21 @@ onMounted(async () => {
       setTabStatus(tabId, 'error')
     }
 
+    // Only notify about completions you're not actively watching: a different
+    // tab, or the app window in the background.
+    const watching = tabId === activeTabId.value && document.hasFocus()
+    if (watching) return
+
     const soundName = tab.soundOverride || effectiveConfig.value.defaultSound
     if (soundName) {
       play(soundName)
     }
+
+    const ok = exitCode === 0
+    Notify(
+      ok ? 'Claude — task complete' : 'Claude — task failed',
+      tab.name || 'Session',
+    ).catch(() => {})
   })
 
   // Keyboard shortcuts

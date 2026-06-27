@@ -28,7 +28,11 @@ export function Log(arg1:string):Promise<void>;
 
 export function NewWindow():Promise<void>;
 
+export function Notify(arg1:string,arg2:string):Promise<void>;
+
 export function OpenDirectoryDialog():Promise<string>;
+
+export function PlaySound(arg1:string):Promise<void>;
 
 export function ReadFile(arg1:string):Promise<string>;
 

@@ -54,8 +54,16 @@ export function NewWindow() {
   return window['go']['main']['App']['NewWindow']();
 }
 
+export function Notify(arg1, arg2) {
+  return window['go']['main']['App']['Notify'](arg1, arg2);
+}
+
 export function OpenDirectoryDialog() {
   return window['go']['main']['App']['OpenDirectoryDialog']();
+}
+
+export function PlaySound(arg1) {
+  return window['go']['main']['App']['PlaySound'](arg1);
 }
 
 export function ReadFile(arg1) {
