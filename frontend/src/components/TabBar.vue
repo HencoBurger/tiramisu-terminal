@@ -123,6 +123,7 @@ onUnmounted(() => {
     >
       <li><a @click="handleNewTab('chat')">Chat</a></li>
       <li><a @click="handleNewTab('terminal')">Terminal</a></li>
+      <li><a @click="handleNewTab('ide')">Editor</a></li>
     </ul>
   </Teleport>
 </template>

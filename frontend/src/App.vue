@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
 import { EventsOn, EventsOff } from '../wailsjs/runtime/runtime'
 import {
   LoadSessionHistory,
@@ -17,6 +17,9 @@ import type { StoredSession } from './types/session'
 import TabBar from './components/TabBar.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import TerminalPanel from './components/TerminalPanel.vue'
+// Lazy: Monaco (~5 MB) loads only when an Editor tab is first opened, keeping
+// chat/terminal-only startup lean.
+const IdePanel = defineAsyncComponent(() => import('./components/ide/IdePanel.vue'))
 import SessionBrowser from './components/SessionBrowser.vue'
 import SessionPicker from './components/SessionPicker.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
@@ -116,7 +119,7 @@ function debouncedSaveTabState() {
 
 // Watch tab changes for persistence
 watch(
-  () => tabs.value.map(t => `${t.id}|${t.name}|${t.workDir}|${t.sessionId}|${t.profileId}|${t.model}|${t.type}`).join(','),
+  () => tabs.value.map(t => `${t.id}|${t.name}|${t.workDir}|${t.sessionId}|${t.profileId}|${t.model}|${t.type}|${(t.openFiles ?? []).join('\n')}|${t.activeFile ?? ''}`).join(','),
   () => debouncedSaveTabState(),
 )
 
@@ -367,6 +370,7 @@ function handleResumeSession(session: StoredSession) {
           >
             <ChatPanel v-if="tab.type === 'chat' || !tab.type" :tab="tab" @command="handleGlobalCommand" />
             <TerminalPanel v-else-if="tab.type === 'terminal'" :tab="tab" />
+            <IdePanel v-else-if="tab.type === 'ide'" :tab="tab" />
           </div>
 
           <!-- Empty state -->

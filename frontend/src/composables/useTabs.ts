@@ -36,6 +36,8 @@ export function useTabs() {
       model: '',
       type,
       activity: false,
+      openFiles: [],
+      activeFile: '',
     }
     tabs.value.push(tab)
     activeTabId.value = id
@@ -113,6 +115,14 @@ export function useTabs() {
     if (tab) tab.activity = active
   }
 
+  function setTabOpenFiles(id: string, openFiles: string[], activeFile: string) {
+    const tab = tabs.value.find(t => t.id === id)
+    if (tab) {
+      tab.openFiles = openFiles
+      tab.activeFile = activeFile
+    }
+  }
+
   function addMessage(tabId: string, msg: Omit<ChatMessage, 'id'>): ChatMessage {
     const tab = tabs.value.find(t => t.id === tabId)
     if (!tab) throw new Error(`Tab ${tabId} not found`)
@@ -156,6 +166,8 @@ export function useTabs() {
       profileId: t.profileId,
       model: t.model,
       type: t.type,
+      openFiles: t.openFiles,
+      activeFile: t.activeFile,
     }))
   }
 
@@ -178,6 +190,8 @@ export function useTabs() {
         model: cfg.model || '',
         type: cfg.type || 'chat',
         activity: false,
+        openFiles: cfg.openFiles || [],
+        activeFile: cfg.activeFile || '',
       }
       tabs.value.push(tab)
     }
@@ -204,6 +218,7 @@ export function useTabs() {
     setTabPlanMode,
     setTabModel,
     setTabActivity,
+    setTabOpenFiles,
     addMessage,
     updateLastAssistantMessage,
     setTabCost,

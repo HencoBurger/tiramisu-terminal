@@ -1,5 +1,5 @@
 export type SessionStatus = 'idle' | 'thinking' | 'tool_use' | 'done' | 'error'
-export type TabType = 'chat' | 'terminal'
+export type TabType = 'chat' | 'terminal' | 'ide'
 
 export interface ToolUseInfo {
   id: string
@@ -31,6 +31,9 @@ export interface TabState {
   model: string
   type: TabType
   activity: boolean
+  // IDE tabs only: open file paths + active file, for restore across restarts.
+  openFiles?: string[]
+  activeFile?: string
 }
 
 export interface ClaudeStreamEvent {
@@ -94,6 +97,8 @@ export interface TabConfig {
   profileId: string
   model: string
   type: TabType
+  openFiles?: string[]
+  activeFile?: string
 }
 
 export interface AppConfig {
