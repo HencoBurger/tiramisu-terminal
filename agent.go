@@ -103,6 +103,35 @@ func (s *AgentSession) hasRead(path string) bool {
 	return s.readFiles[path]
 }
 
+// seedReadFiles scans prior history for successful read_file calls so read-tracking
+// persists across turns of a conversation (and across app restarts, since history is
+// reloaded from disk).
+func seedReadFiles(history []ChatTurn, workDir string) map[string]bool {
+	read := map[string]bool{}
+	pathByID := map[string]string{}
+	for _, turn := range history {
+		switch turn.Role {
+		case "assistant":
+			for _, tc := range turn.ToolCalls {
+				if tc.Function.Name == "read_file" {
+					var args map[string]interface{}
+					_ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
+					if p := argString(args, "path"); p != "" {
+						pathByID[tc.ID] = resolvePath(workDir, p)
+					}
+				}
+			}
+		case "tool":
+			if p, ok := pathByID[turn.ToolCallID]; ok {
+				if !strings.HasPrefix(turn.Content, "Error:") && !strings.HasPrefix(turn.Content, "Refused:") {
+					read[p] = true
+				}
+			}
+		}
+	}
+	return read
+}
+
 // agentSystem returns the base system prompt plus any user-configured custom
 // instructions (the editable "preprompt" from Settings).
 func (a *App) agentSystem() string {
@@ -165,6 +194,7 @@ func (a *App) startAgentRun(tabID, provider, model, workerModel, workDir string,
 		cancel:      cancel,
 		done:        make(chan struct{}),
 		history:     history,
+		readFiles:   seedReadFiles(history, workDir),
 	}
 	a.agentMu.Lock()
 	a.agentSessions[tabID] = session
@@ -320,11 +350,20 @@ func (a *App) executeTool(ctx context.Context, session *AgentSession, tools []To
 	}
 
 	// Enforce read-before-write: refuse to overwrite an existing file the agent
-	// hasn't read this run (prevents blind clobbering by weak models).
+	// hasn't read this conversation (prevents blind clobbering by weak models).
 	if tool.Name == "write_file" {
 		path := resolvePath(session.WorkDir, argString(args, "path"))
-		if fileExists(path) && !session.hasRead(path) {
-			return fmt.Sprintf("Refused: you have not read %q yet this session. Call read_file on it first so you don't overwrite unseen content, then write_file again.", path)
+		if isRegularFile(path) && !session.hasRead(path) {
+			return fmt.Sprintf("Refused: you have not read %q yet. Call read_file on it first so you don't overwrite unseen content, then write_file again.", path)
+		}
+	}
+
+	// Same guard for bash commands that truncate-overwrite an existing file via `>`.
+	if tool.Name == "bash" {
+		for _, p := range bashOverwriteTargets(argString(args, "command"), session.WorkDir) {
+			if !session.hasRead(p) {
+				return fmt.Sprintf("Refused: this command overwrites %q (via >), which you have not read yet. Call read_file on it first, then run the command again.", p)
+			}
 		}
 	}
 

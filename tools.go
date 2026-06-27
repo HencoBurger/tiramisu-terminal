@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -37,9 +38,35 @@ func argString(args map[string]interface{}, key string) string {
 	return ""
 }
 
-func fileExists(path string) bool {
+func isRegularFile(path string) bool {
 	info, err := os.Stat(path)
-	return err == nil && !info.IsDir()
+	return err == nil && info.Mode().IsRegular()
+}
+
+var bashRedirectRe = regexp.MustCompile(`(>>?)\s*("?)([^\s"';|&<>]+)`)
+
+// bashOverwriteTargets returns resolved paths a command appears to TRUNCATE-overwrite
+// via `>` redirection and that exist as regular files. Best-effort: append (>>) is
+// allowed (doesn't clobber); /dev/* and fd dups (>&) are skipped; other write
+// mechanisms (sed -i, tee, cp/mv, scripts) aren't detected here and rely on the
+// permission gate. A `>` inside a quoted string can cause a spurious match — that
+// only ever errs toward requiring a read, never toward an unguarded overwrite.
+func bashOverwriteTargets(cmd, workDir string) []string {
+	var out []string
+	for _, m := range bashRedirectRe.FindAllStringSubmatch(cmd, -1) {
+		op, tok := m[1], m[3]
+		if op != ">" {
+			continue // append (>>) doesn't overwrite existing content
+		}
+		if tok == "" || strings.HasPrefix(tok, "&") || strings.HasPrefix(tok, "/dev/") {
+			continue
+		}
+		p := resolvePath(workDir, tok)
+		if isRegularFile(p) {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func findTool(tools []Tool, name string) *Tool {
