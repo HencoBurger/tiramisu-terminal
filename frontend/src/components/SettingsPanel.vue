@@ -23,6 +23,7 @@ const localOllamaBaseURL = ref('')
 const openRouterKeyInput = ref('')
 const hasOpenRouterKey = ref(false)
 const providerError = ref('')
+const localDisableThinking = ref(false)
 
 // Global defaults
 const localSound = ref('')
@@ -69,6 +70,7 @@ watch(() => props.open, (isOpen) => {
 
     // Providers
     localOllamaBaseURL.value = globalConfig.value.ollamaBaseURL || 'http://localhost:11434'
+    localDisableThinking.value = !!globalConfig.value.disableThinking
     openRouterKeyInput.value = ''
     providerError.value = ''
     hasProviderKey('openrouter').then((v) => (hasOpenRouterKey.value = v)).catch(() => {})
@@ -139,6 +141,7 @@ async function save() {
     ollamaBaseURL: localOllamaBaseURL.value.trim() || 'http://localhost:11434',
     enabledProviders: globalConfig.value.enabledProviders,
     defaultModels: globalConfig.value.defaultModels,
+    disableThinking: localDisableThinking.value,
   })
 
   // Save session overrides
@@ -249,6 +252,17 @@ function close() {
         <p v-if="providerError" class="text-error text-xs mt-1">{{ providerError }}</p>
         <p class="text-xs text-base-content/50 mt-1">
           The key is stored locally in ~/.tiramisu/secrets.json (0600) and never leaves the backend.
+        </p>
+      </div>
+
+      <div class="form-control mb-4">
+        <label class="label cursor-pointer justify-start gap-3">
+          <input type="checkbox" v-model="localDisableThinking" class="checkbox checkbox-sm" />
+          <span class="label-text">Disable model "thinking" (Ollama)</span>
+        </label>
+        <p class="text-xs text-base-content/50 ml-9">
+          Sends reasoning_effort:none — verbose reasoning models (e.g. gemma) reply directly
+          instead of streaming long thoughts that can overflow the context.
         </p>
       </div>
 

@@ -128,6 +128,7 @@ export interface GlobalConfig {
   ollamaBaseURL: string
   enabledProviders: string[]
   defaultModels: Record<string, string>
+  disableThinking: boolean
 }
 
 export interface WindowSession {

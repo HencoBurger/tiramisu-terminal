@@ -76,6 +76,7 @@ export namespace main {
 	    ollamaBaseURL: string;
 	    enabledProviders: string[];
 	    defaultModels: Record<string, string>;
+	    disableThinking: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new GlobalConfig(source);
@@ -90,6 +91,7 @@ export namespace main {
 	        this.ollamaBaseURL = source["ollamaBaseURL"];
 	        this.enabledProviders = source["enabledProviders"];
 	        this.defaultModels = source["defaultModels"];
+	        this.disableThinking = source["disableThinking"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

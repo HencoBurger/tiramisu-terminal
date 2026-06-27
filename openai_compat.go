@@ -15,20 +15,22 @@ import (
 // OpenRouter both speak /v1/chat/completions (SSE), incl. tool calling; they differ
 // only in base URL, auth header, and the model-listing endpoint. Stdlib only.
 type openAICompat struct {
-	chatURL  string
-	apiKey   string
-	listURL  string
-	listKind string // "ollama" | "openai"
-	client   *http.Client
+	chatURL          string
+	apiKey           string
+	listURL          string
+	listKind         string // "ollama" | "openai"
+	disableReasoning bool   // send reasoning_effort:none to suppress thinking
+	client           *http.Client
 }
 
-func newOpenAICompat(base, apiKey, listURL, listKind string) *openAICompat {
+func newOpenAICompat(base, apiKey, listURL, listKind string, disableReasoning bool) *openAICompat {
 	return &openAICompat{
-		chatURL:  strings.TrimRight(base, "/") + "/chat/completions",
-		apiKey:   apiKey,
-		listURL:  listURL,
-		listKind: listKind,
-		client:   &http.Client{},
+		chatURL:          strings.TrimRight(base, "/") + "/chat/completions",
+		apiKey:           apiKey,
+		listURL:          listURL,
+		listKind:         listKind,
+		disableReasoning: disableReasoning,
+		client:           &http.Client{},
 	}
 }
 
@@ -42,10 +44,11 @@ type oaToolDef struct {
 }
 
 type oaChatRequest struct {
-	Model    string      `json:"model"`
-	Messages []ChatTurn  `json:"messages"`
-	Stream   bool        `json:"stream"`
-	Tools    []oaToolDef `json:"tools,omitempty"`
+	Model           string      `json:"model"`
+	Messages        []ChatTurn  `json:"messages"`
+	Stream          bool        `json:"stream"`
+	Tools           []oaToolDef `json:"tools,omitempty"`
+	ReasoningEffort string      `json:"reasoning_effort,omitempty"`
 }
 
 type oaChatChunk struct {
@@ -87,6 +90,9 @@ func (c *openAICompat) StreamChat(ctx context.Context, model string, messages []
 	reqBody := oaChatRequest{Model: model, Messages: messages, Stream: true}
 	if len(tools) > 0 {
 		reqBody.Tools = toolDefs(tools)
+	}
+	if c.disableReasoning {
+		reqBody.ReasoningEffort = "none"
 	}
 	body, err := json.Marshal(reqBody)
 	if err != nil {

@@ -59,6 +59,9 @@ type GlobalConfig struct {
 	OllamaBaseURL    string            `json:"ollamaBaseURL"`
 	EnabledProviders []string          `json:"enabledProviders"`
 	DefaultModels    map[string]string `json:"defaultModels"`
+	// Suppress reasoning-model "thinking" (sends reasoning_effort:none to Ollama) —
+	// gives direct answers and avoids verbose reasoning overflowing the context.
+	DisableThinking bool `json:"disableThinking"`
 }
 
 // WindowSession holds per-window state.

@@ -45,13 +45,13 @@ func (a *App) providerFor(name string) (Provider, error) {
 		if base == "" {
 			base = defaultOllamaBaseURL
 		}
-		return newOpenAICompat(base+"/v1", "", base+"/api/tags", "ollama"), nil
+		return newOpenAICompat(base+"/v1", "", base+"/api/tags", "ollama", a.globalConfig.DisableThinking), nil
 	case "openrouter":
 		key := a.resolveProviderKey("openrouter")
 		if key == "" {
 			return nil, fmt.Errorf("OpenRouter API key not set — add it in Settings")
 		}
-		return newOpenAICompat("https://openrouter.ai/api/v1", key, "https://openrouter.ai/api/v1/models", "openai"), nil
+		return newOpenAICompat("https://openrouter.ai/api/v1", key, "https://openrouter.ai/api/v1/models", "openai", false), nil
 	default:
 		return nil, fmt.Errorf("unknown provider %q", name)
 	}

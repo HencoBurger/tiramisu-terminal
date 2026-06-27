@@ -16,6 +16,7 @@ const globalConfig = ref<GlobalConfig>({
   ollamaBaseURL: 'http://localhost:11434',
   enabledProviders: ['claude', 'ollama', 'openrouter'],
   defaultModels: {},
+  disableThinking: false,
 })
 
 const windowSession = ref<WindowSession | null>(null)
@@ -43,6 +44,7 @@ export function useConfig() {
         ollamaBaseURL: c.ollamaBaseURL || 'http://localhost:11434',
         enabledProviders: c.enabledProviders || ['claude', 'ollama', 'openrouter'],
         defaultModels: c.defaultModels || {},
+        disableThinking: !!c.disableThinking,
       }
       document.documentElement.setAttribute('data-theme', effectiveConfig.value.theme)
     } catch (e) {
