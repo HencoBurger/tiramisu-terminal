@@ -95,6 +95,8 @@ type App struct {
 	sessMu           sync.RWMutex
 	agentSessions    map[string]*AgentSession
 	agentMu          sync.RWMutex
+	pendingPerms     map[string]chan bool
+	permMu           sync.Mutex
 	terminals        map[string]*PTYSession
 	termMu           sync.RWMutex
 	globalConfig     GlobalConfig
@@ -108,6 +110,7 @@ func NewApp() *App {
 	return &App{
 		sessions:      make(map[string]*ClaudeSession),
 		agentSessions: make(map[string]*AgentSession),
+		pendingPerms:  make(map[string]chan bool),
 		terminals:     make(map[string]*PTYSession),
 	}
 }

@@ -13,10 +13,23 @@ type ModelInfo struct {
 	Name string `json:"name"`
 }
 
-// Provider is the seam every model backend implements. M0 only needs streaming chat
-// + model listing; M1 will extend StreamChat with tool support.
+// StreamCallbacks receive streaming deltas as a provider response arrives.
+type StreamCallbacks struct {
+	OnText      func(text string)
+	OnToolStart func(index int, id, name string)
+	OnToolArgs  func(index int, argsDelta string)
+}
+
+// StreamResult is the assembled outcome of one provider turn.
+type StreamResult struct {
+	Content   string
+	ToolCalls []ToolCall
+	Finish    string
+}
+
+// Provider is the seam every model backend implements.
 type Provider interface {
-	StreamChat(ctx context.Context, model string, messages []ChatTurn, onDelta func(string)) (finishReason string, err error)
+	StreamChat(ctx context.Context, model string, messages []ChatTurn, tools []Tool, cb StreamCallbacks) (StreamResult, error)
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 }
 

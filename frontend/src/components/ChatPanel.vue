@@ -5,6 +5,7 @@ import { useSession } from '../composables/useSession'
 import { useTabs } from '../composables/useTabs'
 import { useConfig } from '../composables/useConfig'
 import { useAgent } from '../composables/useAgent'
+import { usePermissions } from '../composables/usePermissions'
 import { slashCommands } from '../types/slashCommands'
 import { RunGitDiff } from '../../wailsjs/go/main/App'
 import MessageBubble from './MessageBubble.vue'
@@ -20,7 +21,24 @@ const props = defineProps<{
 const { startSession, sendMessage, resumeSession, stopSession } = useSession()
 const { addMessage, setTabStatus, setTabWorkDir, setTabProfile, setTabPlanMode, setTabModel, autoNameTab, renameTab } = useTabs()
 const { effectiveConfig, maybeSetDefaultWorkDir } = useConfig()
-const { agentStart, agentSend, agentStop } = useAgent()
+const { agentStart, agentSend, agentStop, agentPermissionDecision } = useAgent()
+const { pending: pendingPerms, clear: clearPerm } = usePermissions()
+
+function permFor() {
+  return pendingPerms[props.tab.id]
+}
+function approvePermission() {
+  const req = permFor()
+  if (!req) return
+  agentPermissionDecision(req.reqId, true).catch(() => {})
+  clearPerm(props.tab.id)
+}
+function denyPermission() {
+  const req = permFor()
+  if (!req) return
+  agentPermissionDecision(req.reqId, false).catch(() => {})
+  clearPerm(props.tab.id)
+}
 
 const profiles = computed(() => effectiveConfig.value.profiles || [])
 
@@ -383,6 +401,19 @@ async function handleCommand(action: string) {
         <div class="chat-bubble">
           <span class="loading loading-dots loading-sm"></span>
         </div>
+      </div>
+    </div>
+
+    <!-- Permission request (native agent tool gate) -->
+    <div v-if="pendingPerms[tab.id]" class="px-3 py-2 bg-warning/15 border-t border-warning/40 text-sm">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="font-semibold text-warning">Permission required</span>
+        <span class="opacity-70">Run tool <code class="px-1 rounded bg-base-300">{{ pendingPerms[tab.id].toolName }}</code>?</span>
+      </div>
+      <pre class="text-xs bg-base-300/60 rounded p-2 overflow-x-auto max-h-32 mb-2">{{ pendingPerms[tab.id].toolInput }}</pre>
+      <div class="flex gap-2">
+        <button class="btn btn-success btn-xs" @click="approvePermission">Approve</button>
+        <button class="btn btn-ghost btn-xs" @click="denyPermission">Deny</button>
       </div>
     </div>
 

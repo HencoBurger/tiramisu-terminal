@@ -12,12 +12,12 @@ import (
 )
 
 // openAICompat is one OpenAI-compatible client used by BOTH providers. Ollama and
-// OpenRouter both speak /v1/chat/completions (SSE); they differ only in base URL,
-// auth header, and the model-listing endpoint. Stdlib only — no new deps.
+// OpenRouter both speak /v1/chat/completions (SSE), incl. tool calling; they differ
+// only in base URL, auth header, and the model-listing endpoint. Stdlib only.
 type openAICompat struct {
-	chatURL  string // {base}/chat/completions
-	apiKey   string // "" => no Authorization header (Ollama)
-	listURL  string // ollama: {base}/api/tags ; openrouter: /v1/models
+	chatURL  string
+	apiKey   string
+	listURL  string
 	listKind string // "ollama" | "openai"
 	client   *http.Client
 }
@@ -32,21 +32,35 @@ func newOpenAICompat(base, apiKey, listURL, listKind string) *openAICompat {
 	}
 }
 
-type oaMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+type oaToolDef struct {
+	Type     string `json:"type"`
+	Function struct {
+		Name        string                 `json:"name"`
+		Description string                 `json:"description"`
+		Parameters  map[string]interface{} `json:"parameters"`
+	} `json:"function"`
 }
 
 type oaChatRequest struct {
 	Model    string      `json:"model"`
-	Messages []oaMessage `json:"messages"`
+	Messages []ChatTurn  `json:"messages"`
 	Stream   bool        `json:"stream"`
+	Tools    []oaToolDef `json:"tools,omitempty"`
 }
 
 type oaChatChunk struct {
 	Choices []struct {
 		Delta struct {
-			Content string `json:"content"`
+			Content   string `json:"content"`
+			ToolCalls []struct {
+				Index    int    `json:"index"`
+				ID       string `json:"id"`
+				Type     string `json:"type"`
+				Function struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				} `json:"function"`
+			} `json:"tool_calls"`
 		} `json:"delta"`
 		FinishReason *string `json:"finish_reason"`
 	} `json:"choices"`
@@ -55,18 +69,31 @@ type oaChatChunk struct {
 	} `json:"error"`
 }
 
-func (c *openAICompat) StreamChat(ctx context.Context, model string, messages []ChatTurn, onDelta func(string)) (string, error) {
-	msgs := make([]oaMessage, len(messages))
-	for i, m := range messages {
-		msgs[i] = oaMessage{Role: m.Role, Content: m.Content}
+func toolDefs(tools []Tool) []oaToolDef {
+	defs := make([]oaToolDef, 0, len(tools))
+	for _, t := range tools {
+		var d oaToolDef
+		d.Type = "function"
+		d.Function.Name = t.Name
+		d.Function.Description = t.Description
+		d.Function.Parameters = t.Parameters
+		defs = append(defs, d)
 	}
-	body, err := json.Marshal(oaChatRequest{Model: model, Messages: msgs, Stream: true})
+	return defs
+}
+
+func (c *openAICompat) StreamChat(ctx context.Context, model string, messages []ChatTurn, tools []Tool, cb StreamCallbacks) (StreamResult, error) {
+	reqBody := oaChatRequest{Model: model, Messages: messages, Stream: true}
+	if len(tools) > 0 {
+		reqBody.Tools = toolDefs(tools)
+	}
+	body, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", err
+		return StreamResult{}, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.chatURL, bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return StreamResult{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if c.apiKey != "" {
@@ -75,20 +102,24 @@ func (c *openAICompat) StreamChat(ctx context.Context, model string, messages []
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return "", err
+		return StreamResult{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return "", fmt.Errorf("%s: %s", resp.Status, strings.TrimSpace(string(b)))
+		return StreamResult{}, fmt.Errorf("%s: %s", resp.Status, strings.TrimSpace(string(b)))
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
-	finishReason := ""
+
+	var content strings.Builder
+	acc := map[int]*ToolCall{}
+	var order []int
+	finish := ""
+
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		// Skip blanks and SSE comment/keep-alive lines (e.g. OpenRouter ": PROCESSING").
 		if line == "" || !strings.HasPrefix(line, "data:") {
 			continue
 		}
@@ -101,21 +132,55 @@ func (c *openAICompat) StreamChat(ctx context.Context, model string, messages []
 			continue
 		}
 		if chunk.Error != nil {
-			return finishReason, fmt.Errorf("%s", chunk.Error.Message)
+			return StreamResult{}, fmt.Errorf("%s", chunk.Error.Message)
 		}
-		if len(chunk.Choices) > 0 {
-			if t := chunk.Choices[0].Delta.Content; t != "" {
-				onDelta(t)
+		if len(chunk.Choices) == 0 {
+			continue
+		}
+		ch := chunk.Choices[0]
+		if ch.Delta.Content != "" {
+			content.WriteString(ch.Delta.Content)
+			if cb.OnText != nil {
+				cb.OnText(ch.Delta.Content)
 			}
-			if fr := chunk.Choices[0].FinishReason; fr != nil {
-				finishReason = *fr
+		}
+		for _, tc := range ch.Delta.ToolCalls {
+			cur, ok := acc[tc.Index]
+			if !ok {
+				cur = &ToolCall{Type: "function"}
+				acc[tc.Index] = cur
+				order = append(order, tc.Index)
 			}
+			if tc.ID != "" {
+				cur.ID = tc.ID
+			}
+			nameWasEmpty := cur.Function.Name == ""
+			if tc.Function.Name != "" {
+				cur.Function.Name = tc.Function.Name
+			}
+			if nameWasEmpty && cur.Function.Name != "" && cb.OnToolStart != nil {
+				cb.OnToolStart(tc.Index, cur.ID, cur.Function.Name)
+			}
+			if tc.Function.Arguments != "" {
+				cur.Function.Arguments += tc.Function.Arguments
+				if cb.OnToolArgs != nil {
+					cb.OnToolArgs(tc.Index, tc.Function.Arguments)
+				}
+			}
+		}
+		if ch.FinishReason != nil {
+			finish = *ch.FinishReason
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return finishReason, err
+		return StreamResult{}, err
 	}
-	return finishReason, nil
+
+	res := StreamResult{Content: content.String(), Finish: finish}
+	for _, idx := range order {
+		res.ToolCalls = append(res.ToolCalls, *acc[idx])
+	}
+	return res, nil
 }
 
 func (c *openAICompat) ListModels(ctx context.Context) ([]ModelInfo, error) {
@@ -156,7 +221,6 @@ func (c *openAICompat) ListModels(ctx context.Context) ([]ModelInfo, error) {
 		return models, nil
 	}
 
-	// openai-style /v1/models
 	var out struct {
 		Data []struct {
 			ID   string `json:"id"`

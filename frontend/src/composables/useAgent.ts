@@ -2,6 +2,7 @@ import {
   AgentStart,
   AgentSend,
   AgentStop,
+  AgentPermissionDecision,
   ListProviderModels,
   SetProviderKey,
   HasProviderKey,
@@ -20,11 +21,15 @@ export function useAgent() {
   async function agentStop(tabId: string) {
     await AgentStop(tabId)
   }
+  async function agentPermissionDecision(reqId: string, approved: boolean) {
+    await AgentPermissionDecision(reqId, approved)
+  }
 
   return {
     agentStart,
     agentSend,
     agentStop,
+    agentPermissionDecision,
     listProviderModels: ListProviderModels,
     setProviderKey: SetProviderKey,
     hasProviderKey: HasProviderKey,
