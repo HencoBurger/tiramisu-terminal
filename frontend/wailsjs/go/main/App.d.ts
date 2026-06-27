@@ -12,6 +12,8 @@ export function AgentStop(arg1:string):Promise<void>;
 
 export function CreateWindowSession(arg1:string):Promise<main.WindowSession>;
 
+export function DeleteAgentHistory(arg1:string):Promise<void>;
+
 export function DeleteProviderKey(arg1:string):Promise<void>;
 
 export function DeleteWindowSession(arg1:string):Promise<void>;
@@ -33,6 +35,8 @@ export function ListDirectory(arg1:string):Promise<Array<main.FileEntry>>;
 export function ListProviderModels(arg1:string):Promise<Array<main.ModelInfo>>;
 
 export function ListWindowSessions():Promise<Array<main.WindowSessionSummary>>;
+
+export function LoadAgentSessionHistory(arg1:string):Promise<Array<main.HistoryMessage>>;
 
 export function LoadSessionHistory(arg1:string,arg2:string):Promise<Array<main.HistoryMessage>>;
 

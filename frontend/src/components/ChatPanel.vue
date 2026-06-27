@@ -21,7 +21,7 @@ const props = defineProps<{
 const { startSession, sendMessage, resumeSession, stopSession } = useSession()
 const { addMessage, setTabStatus, setTabWorkDir, setTabProfile, setTabPlanMode, setTabModel, autoNameTab, renameTab } = useTabs()
 const { effectiveConfig, maybeSetDefaultWorkDir } = useConfig()
-const { agentStart, agentSend, agentStop, agentPermissionDecision } = useAgent()
+const { agentStart, agentSend, agentStop, agentPermissionDecision, deleteAgentHistory } = useAgent()
 const { pending: pendingPerms, clear: clearPerm } = usePermissions()
 
 function permFor() {
@@ -198,7 +198,10 @@ async function handleCommand(action: string) {
   switch (action) {
     case 'clear':
       props.tab.messages.splice(0)
-      if ((props.tab.provider || 'claude') !== 'claude') agentStop(props.tab.id).catch(() => {})
+      if ((props.tab.provider || 'claude') !== 'claude') {
+        agentStop(props.tab.id).catch(() => {})
+        deleteAgentHistory(props.tab.id).catch(() => {})
+      }
       break
     case 'stop':
       if ((props.tab.provider || 'claude') === 'claude') stopSession(props.tab.id).catch(() => {})

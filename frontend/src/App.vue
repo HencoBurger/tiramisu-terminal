@@ -8,6 +8,7 @@ import {
   NewWindow,
   CreateWindowSession,
   LoadWindowSession,
+  LoadAgentSessionHistory,
   Notify,
 } from '../wailsjs/go/main/App'
 import { useTabs } from './composables/useTabs'
@@ -198,13 +199,12 @@ async function handleSessionSelect(id: string) {
     if (loaded.tabs && loaded.tabs.length > 0) {
       restoreTabs(loaded.tabs as any)
       for (const tabCfg of loaded.tabs) {
-        if (
-          tabCfg.sessionId &&
-          tabCfg.workDir &&
-          (tabCfg.type || 'chat') === 'chat' &&
-          (tabCfg.provider || 'claude') === 'claude'
-        ) {
+        const isChat = (tabCfg.type || 'chat') === 'chat'
+        const isClaude = (tabCfg.provider || 'claude') === 'claude'
+        if (isChat && isClaude && tabCfg.sessionId && tabCfg.workDir) {
           loadTabHistory(tabCfg.id, tabCfg.sessionId, tabCfg.workDir)
+        } else if (isChat && !isClaude) {
+          loadAgentTabHistory(tabCfg.id)
         }
       }
     } else {
@@ -322,6 +322,29 @@ async function loadTabHistory(tabId: string, sessionId: string, workDir: string)
     }
   } catch (e) {
     console.error(`Failed to load history for tab ${tabId}:`, e)
+  }
+}
+
+async function loadAgentTabHistory(tabId: string) {
+  try {
+    const history = await LoadAgentSessionHistory(tabId)
+    if (!history || history.length === 0) return
+    for (const msg of history) {
+      addMessage(tabId, {
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content || '',
+        toolUse: (msg.tools || []).map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          input: t.input,
+          output: t.output || undefined,
+        })),
+        timestamp: Date.now(),
+        isStreaming: false,
+      })
+    }
+  } catch (e) {
+    console.error(`Failed to load native history for tab ${tabId}:`, e)
   }
 }
 

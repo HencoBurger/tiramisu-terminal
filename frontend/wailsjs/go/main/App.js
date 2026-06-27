@@ -22,6 +22,10 @@ export function CreateWindowSession(arg1) {
   return window['go']['main']['App']['CreateWindowSession'](arg1);
 }
 
+export function DeleteAgentHistory(arg1) {
+  return window['go']['main']['App']['DeleteAgentHistory'](arg1);
+}
+
 export function DeleteProviderKey(arg1) {
   return window['go']['main']['App']['DeleteProviderKey'](arg1);
 }
@@ -64,6 +68,10 @@ export function ListProviderModels(arg1) {
 
 export function ListWindowSessions() {
   return window['go']['main']['App']['ListWindowSessions']();
+}
+
+export function LoadAgentSessionHistory(arg1) {
+  return window['go']['main']['App']['LoadAgentSessionHistory'](arg1);
 }
 
 export function LoadSessionHistory(arg1, arg2) {

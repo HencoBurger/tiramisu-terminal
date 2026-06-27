@@ -7,6 +7,8 @@ import {
   SetProviderKey,
   HasProviderKey,
   DeleteProviderKey,
+  LoadAgentSessionHistory,
+  DeleteAgentHistory,
 } from '../../wailsjs/go/main/App'
 
 // Thin wrapper over the native chat runtime bindings (mirrors useSession.ts for the
@@ -34,5 +36,7 @@ export function useAgent() {
     setProviderKey: SetProviderKey,
     hasProviderKey: HasProviderKey,
     deleteProviderKey: DeleteProviderKey,
+    loadAgentSessionHistory: LoadAgentSessionHistory,
+    deleteAgentHistory: DeleteAgentHistory,
   }
 }

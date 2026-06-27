@@ -89,6 +89,12 @@ func (a *App) AgentSend(tabID, provider, model, workerModel, workDir, prompt str
 	session, ok := a.agentSessions[tabID]
 	a.agentMu.RUnlock()
 	if !ok {
+		// Restore persisted context across restarts so follow-ups keep their history.
+		if hist, _ := a.loadAgentHistory(tabID); len(hist) > 0 {
+			history := append(append([]ChatTurn{}, hist...), ChatTurn{Role: "user", Content: prompt})
+			a.startAgentRun(tabID, provider, model, workerModel, workDir, history)
+			return nil
+		}
 		return a.AgentStart(tabID, provider, model, workerModel, workDir, prompt)
 	}
 
@@ -156,14 +162,23 @@ func (a *App) runAgent(ctx context.Context, session *AgentSession) {
 	tabID := session.TabID
 	switch {
 	case err == nil:
+		a.persistAgentHistory(session)
 		a.safeEmit("agent:event", tabID, AgentEvent{Type: "done"})
 		a.safeEmit("session:done", tabID, 0)
 	case errors.Is(err, context.Canceled):
 		// Superseded or stopped — stay silent; the replacing run / stop UI owns state.
 	default:
+		a.persistAgentHistory(session)
 		a.safeEmit("agent:event", tabID, AgentEvent{Type: "error", Error: err.Error()})
 		a.safeEmit("session:done", tabID, 1)
 	}
+}
+
+func (a *App) persistAgentHistory(session *AgentSession) {
+	session.mu.Lock()
+	hist := append([]ChatTurn{}, session.history...)
+	session.mu.Unlock()
+	a.saveAgentHistory(session.TabID, hist)
 }
 
 // agentLoop drives one model→tools→model cycle until the model stops calling tools.
