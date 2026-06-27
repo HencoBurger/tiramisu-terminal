@@ -85,6 +85,22 @@ type AgentSession struct {
 	done        chan struct{}
 	mu          sync.Mutex
 	history     []ChatTurn
+	readFiles   map[string]bool // files read this run (enforces read-before-write)
+}
+
+func (s *AgentSession) markRead(path string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.readFiles == nil {
+		s.readFiles = map[string]bool{}
+	}
+	s.readFiles[path] = true
+}
+
+func (s *AgentSession) hasRead(path string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.readFiles[path]
 }
 
 // agentSystem returns the base system prompt plus any user-configured custom
@@ -302,10 +318,26 @@ func (a *App) executeTool(ctx context.Context, session *AgentSession, tools []To
 	if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
 		args = map[string]interface{}{}
 	}
+
+	// Enforce read-before-write: refuse to overwrite an existing file the agent
+	// hasn't read this run (prevents blind clobbering by weak models).
+	if tool.Name == "write_file" {
+		path := resolvePath(session.WorkDir, argString(args, "path"))
+		if fileExists(path) && !session.hasRead(path) {
+			return fmt.Sprintf("Refused: you have not read %q yet this session. Call read_file on it first so you don't overwrite unseen content, then write_file again.", path)
+		}
+	}
+
 	if !a.checkPermission(ctx, session, tool, tc.Function.Arguments) {
 		return "Denied by user."
 	}
 	out, err := tool.Run(ctx, session.WorkDir, args)
+
+	// Record successful reads so subsequent writes to the same file are allowed.
+	if tool.Name == "read_file" && err == nil {
+		session.markRead(resolvePath(session.WorkDir, argString(args, "path")))
+	}
+
 	if err != nil {
 		if out != "" {
 			return out + "\nError: " + err.Error()
