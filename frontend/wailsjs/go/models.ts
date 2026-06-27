@@ -52,6 +52,22 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class FileEntry {
+	    name: string;
+	    path: string;
+	    isDir: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new FileEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.isDir = source["isDir"];
+	    }
+	}
 	export class GlobalConfig {
 	    defaultSound: string;
 	    theme: string;
@@ -171,6 +187,8 @@ export namespace main {
 	    profileId: string;
 	    model: string;
 	    type: string;
+	    openFiles?: string[];
+	    activeFile?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new TabConfig(source);
@@ -186,6 +204,8 @@ export namespace main {
 	        this.profileId = source["profileId"];
 	        this.model = source["model"];
 	        this.type = source["type"];
+	        this.openFiles = source["openFiles"];
+	        this.activeFile = source["activeFile"];
 	    }
 	}
 	export class WindowSession {

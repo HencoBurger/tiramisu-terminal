@@ -16,6 +16,8 @@ export function GetSessionID(arg1:string):Promise<string>;
 
 export function ListClaudeSessions():Promise<Array<main.StoredSession>>;
 
+export function ListDirectory(arg1:string):Promise<Array<main.FileEntry>>;
+
 export function ListWindowSessions():Promise<Array<main.WindowSessionSummary>>;
 
 export function LoadSessionHistory(arg1:string,arg2:string):Promise<Array<main.HistoryMessage>>;
@@ -27,6 +29,8 @@ export function Log(arg1:string):Promise<void>;
 export function NewWindow():Promise<void>;
 
 export function OpenDirectoryDialog():Promise<string>;
+
+export function ReadFile(arg1:string):Promise<string>;
 
 export function RunGitDiff(arg1:string):Promise<string>;
 
@@ -57,3 +61,5 @@ export function TerminalSaveScrollback(arg1:string,arg2:string):Promise<void>;
 export function TerminalStart(arg1:string,arg2:number,arg3:number,arg4:string):Promise<void>;
 
 export function TerminalStop(arg1:string):Promise<void>;
+
+export function WriteFile(arg1:string,arg2:string):Promise<void>;

@@ -31,6 +31,9 @@ type TabConfig struct {
 	ProfileID     string `json:"profileId"`
 	Model         string `json:"model"`
 	Type          string `json:"type"`
+	// IDE tabs: the open file paths and which one was active, for restore.
+	OpenFiles  []string `json:"openFiles,omitempty"`
+	ActiveFile string   `json:"activeFile,omitempty"`
 }
 
 // AppConfig is kept for backward compatibility during migration.

@@ -30,6 +30,10 @@ export function ListClaudeSessions() {
   return window['go']['main']['App']['ListClaudeSessions']();
 }
 
+export function ListDirectory(arg1) {
+  return window['go']['main']['App']['ListDirectory'](arg1);
+}
+
 export function ListWindowSessions() {
   return window['go']['main']['App']['ListWindowSessions']();
 }
@@ -52,6 +56,10 @@ export function NewWindow() {
 
 export function OpenDirectoryDialog() {
   return window['go']['main']['App']['OpenDirectoryDialog']();
+}
+
+export function ReadFile(arg1) {
+  return window['go']['main']['App']['ReadFile'](arg1);
 }
 
 export function RunGitDiff(arg1) {
@@ -112,4 +120,8 @@ export function TerminalStart(arg1, arg2, arg3, arg4) {
 
 export function TerminalStop(arg1) {
   return window['go']['main']['App']['TerminalStop'](arg1);
+}
+
+export function WriteFile(arg1, arg2) {
+  return window['go']['main']['App']['WriteFile'](arg1, arg2);
 }
