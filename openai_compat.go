@@ -48,7 +48,8 @@ type oaChatRequest struct {
 	Messages        []interface{} `json:"messages"`
 	Stream          bool          `json:"stream"`
 	Tools           []oaToolDef   `json:"tools,omitempty"`
-	ReasoningEffort string        `json:"reasoning_effort,omitempty"`
+	ReasoningEffort string        `json:"reasoning_effort,omitempty"` // Ollama: "none" to skip thinking
+	Reasoning       interface{}   `json:"reasoning,omitempty"`        // OpenRouter: {exclude:true}
 }
 
 // toOAMessage converts a ChatTurn to an OpenAI message. Turns with images become
@@ -123,7 +124,12 @@ func (c *openAICompat) StreamChat(ctx context.Context, model string, messages []
 		reqBody.Tools = toolDefs(tools)
 	}
 	if c.disableReasoning {
-		reqBody.ReasoningEffort = "none"
+		// Ollama understands reasoning_effort:none; OpenRouter uses reasoning:{exclude:true}.
+		if c.listKind == "ollama" {
+			reqBody.ReasoningEffort = "none"
+		} else {
+			reqBody.Reasoning = map[string]interface{}{"exclude": true}
+		}
 	}
 	body, err := json.Marshal(reqBody)
 	if err != nil {

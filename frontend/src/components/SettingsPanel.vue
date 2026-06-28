@@ -264,11 +264,12 @@ function close() {
       <div class="form-control mb-4">
         <label class="label cursor-pointer justify-start gap-3">
           <input type="checkbox" v-model="localDisableThinking" class="checkbox checkbox-sm" />
-          <span class="label-text">Disable model "thinking" (Ollama)</span>
+          <span class="label-text">Disable model "thinking"</span>
         </label>
         <p class="text-xs text-base-content/50 ml-9">
-          Sends reasoning_effort:none — verbose reasoning models (e.g. gemma) reply directly
-          instead of streaming long thoughts that can overflow the context.
+          Verbose reasoning models (e.g. gemma) reply directly instead of streaming long
+          thoughts that can overflow the context. Applies to both providers (Ollama:
+          reasoning_effort none; OpenRouter: reasoning exclude).
         </p>
       </div>
 

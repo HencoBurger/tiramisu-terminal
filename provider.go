@@ -51,7 +51,7 @@ func (a *App) providerFor(name string) (Provider, error) {
 		if key == "" {
 			return nil, fmt.Errorf("OpenRouter API key not set — add it in Settings")
 		}
-		return newOpenAICompat("https://openrouter.ai/api/v1", key, "https://openrouter.ai/api/v1/models", "openai", false), nil
+		return newOpenAICompat("https://openrouter.ai/api/v1", key, "https://openrouter.ai/api/v1/models", "openai", a.globalConfig.DisableThinking), nil
 	default:
 		return nil, fmt.Errorf("unknown provider %q", name)
 	}
