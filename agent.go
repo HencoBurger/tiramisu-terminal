@@ -31,6 +31,7 @@ When changing code:
 - Make the smallest change that solves the task; preserve existing behavior, structure, and style.
 - DO NOT make destructive changes — never delete files or large blocks, overwrite unrelated content, or run destructive shell commands (e.g. rm -rf, git reset --hard) unless the user clearly asked for it.
 - Prefer editing only the specific lines that need to change.
+- write_file targets ONE file: its path must include the filename (e.g. src/app.go), never a directory. To create a file in a folder, append the filename to the folder path.
 
 For well-scoped sub-tasks prefer delegate, which runs a worker agent and returns its result, keeping your own context lean.
 
@@ -354,6 +355,9 @@ func (a *App) executeTool(ctx context.Context, session *AgentSession, tools []To
 	// hasn't read this conversation (prevents blind clobbering by weak models).
 	if tool.Name == "write_file" {
 		path := resolvePath(session.WorkDir, argString(args, "path"))
+		if isDir(path) {
+			return fmt.Sprintf("Error: %q is a directory, not a file. write_file writes a single file — pass a path that includes the filename (e.g. %s/yourfile.ext).", path, strings.TrimRight(path, "/"))
+		}
 		if isRegularFile(path) && !session.hasRead(path) {
 			return fmt.Sprintf("Refused: you have not read %q yet. Call read_file on it first so you don't overwrite unseen content, then write_file again.", path)
 		}

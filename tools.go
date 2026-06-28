@@ -43,6 +43,11 @@ func isRegularFile(path string) bool {
 	return err == nil && info.Mode().IsRegular()
 }
 
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
 var bashRedirectRe = regexp.MustCompile(`(>>?)\s*("?)([^\s"';|&<>]+)`)
 
 // bashOverwriteTargets returns resolved paths a command appears to TRUNCATE-overwrite
@@ -131,11 +136,11 @@ func defaultTools() []Tool {
 		},
 		{
 			Name:        "write_file",
-			Description: "Create or overwrite a file with the given content.",
+			Description: "Create or overwrite a single file with the given content. The path must be a file (including its filename), never a directory.",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"path":    map[string]interface{}{"type": "string", "description": "File path, absolute or relative to the working directory."},
+					"path":    map[string]interface{}{"type": "string", "description": "Path to a single file INCLUDING its filename (e.g. src/app.go), not a directory. Absolute or relative to the working directory."},
 					"content": map[string]interface{}{"type": "string", "description": "Full file content to write."},
 				},
 				"required": []string{"path", "content"},
