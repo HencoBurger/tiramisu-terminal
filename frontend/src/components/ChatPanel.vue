@@ -102,13 +102,17 @@ function scrollToBottom() {
   }
 }
 
-async function handleSend(text: string) {
+async function handleSend(text: string, images: string[] = []) {
   if (needsWorkDir.value) {
     showWorkDirPicker.value = true
     return
   }
 
   error.value = ''
+
+  // Images are only supported by the native runtime (vision models), not Claude CLI.
+  const provider = props.tab.provider || 'claude'
+  const sendImages = provider === 'claude' ? [] : images
 
   // Add user message to chat
   addMessage(props.tab.id, {
@@ -117,12 +121,23 @@ async function handleSend(text: string) {
     toolUse: [],
     timestamp: Date.now(),
     isStreaming: false,
+    images: sendImages.length ? sendImages : undefined,
   })
+
+  if (provider === 'claude' && images.length) {
+    addMessage(props.tab.id, {
+      role: 'system',
+      content: 'Image attachments are only supported with Ollama/OpenRouter vision models, not Claude CLI — sent text only.',
+      toolUse: [],
+      timestamp: Date.now(),
+      isStreaming: false,
+    })
+  }
 
   // Auto-name tab on first user message
   const userMessages = props.tab.messages.filter(m => m.role === 'user')
   if (userMessages.length === 1) {
-    autoNameTab(props.tab.id, text)
+    autoNameTab(props.tab.id, text || '(image)')
   }
 
   // Plan mode: prepend planning prefix to the prompt sent to Claude
@@ -132,16 +147,15 @@ async function handleSend(text: string) {
   }
 
   // Native providers (Ollama/OpenRouter) go through the agent runtime, not Claude CLI.
-  const provider = props.tab.provider || 'claude'
   if (provider !== 'claude') {
     setTabStatus(props.tab.id, 'thinking')
     const hasAssistant = props.tab.messages.some(m => m.role === 'assistant')
     try {
       const worker = props.tab.workerModel || ''
       if (hasAssistant) {
-        await agentSend(props.tab.id, provider, props.tab.model, worker, props.tab.workDir, promptToSend)
+        await agentSend(props.tab.id, provider, props.tab.model, worker, props.tab.workDir, promptToSend, sendImages)
       } else {
-        await agentStart(props.tab.id, provider, props.tab.model, worker, props.tab.workDir, promptToSend)
+        await agentStart(props.tab.id, provider, props.tab.model, worker, props.tab.workDir, promptToSend, sendImages)
       }
     } catch (e: any) {
       error.value = e?.message || String(e)

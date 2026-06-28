@@ -58,6 +58,7 @@ type ToolCall struct {
 type ChatTurn struct {
 	Role       string     `json:"role"` // system | user | assistant | tool
 	Content    string     `json:"content"`
+	Images     []string   `json:"images,omitempty"`       // data-URL images (user turns)
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`   // assistant turns that call tools
 	ToolCallID string     `json:"tool_call_id,omitempty"` // tool-result turns
 }
@@ -143,11 +144,11 @@ func (a *App) agentSystem() string {
 }
 
 // AgentStart begins a fresh native-provider conversation in a tab.
-func (a *App) AgentStart(tabID, provider, model, workerModel, workDir, prompt string) error {
+func (a *App) AgentStart(tabID, provider, model, workerModel, workDir, prompt string, images []string) error {
 	a.stopAgentForTab(tabID)
 	history := []ChatTurn{
 		{Role: "system", Content: a.agentSystem()},
-		{Role: "user", Content: prompt},
+		{Role: "user", Content: prompt, Images: images},
 	}
 	a.startAgentRun(tabID, provider, model, workerModel, workDir, history)
 	return nil
@@ -155,23 +156,23 @@ func (a *App) AgentStart(tabID, provider, model, workerModel, workDir, prompt st
 
 // AgentSend continues a tab's native conversation. Self-heals to a fresh start if the
 // tab isn't tracked (after an app restart or a provider switch) — never hard-errors.
-func (a *App) AgentSend(tabID, provider, model, workerModel, workDir, prompt string) error {
+func (a *App) AgentSend(tabID, provider, model, workerModel, workDir, prompt string, images []string) error {
 	a.agentMu.RLock()
 	session, ok := a.agentSessions[tabID]
 	a.agentMu.RUnlock()
 	if !ok {
 		// Restore persisted context across restarts so follow-ups keep their history.
 		if hist, _ := a.loadAgentHistory(tabID); len(hist) > 0 {
-			history := append(append([]ChatTurn{}, hist...), ChatTurn{Role: "user", Content: prompt})
+			history := append(append([]ChatTurn{}, hist...), ChatTurn{Role: "user", Content: prompt, Images: images})
 			a.startAgentRun(tabID, provider, model, workerModel, workDir, history)
 			return nil
 		}
-		return a.AgentStart(tabID, provider, model, workerModel, workDir, prompt)
+		return a.AgentStart(tabID, provider, model, workerModel, workDir, prompt, images)
 	}
 
 	a.stopAgentForTab(tabID)
 	session.mu.Lock()
-	history := append(append([]ChatTurn{}, session.history...), ChatTurn{Role: "user", Content: prompt})
+	history := append(append([]ChatTurn{}, session.history...), ChatTurn{Role: "user", Content: prompt, Images: images})
 	session.mu.Unlock()
 	a.startAgentRun(tabID, provider, model, workerModel, workDir, history)
 	return nil

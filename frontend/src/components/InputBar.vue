@@ -8,13 +8,66 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  send: [message: string]
+  send: [message: string, images: string[]]
   command: [action: string]
 }>()
 
 const message = ref('')
 const textareaEl = ref<HTMLTextAreaElement>()
 const menuEl = ref<HTMLUListElement>()
+const fileInputEl = ref<HTMLInputElement>()
+const attachedImages = ref<string[]>([])
+
+function fileToDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+async function addFiles(files: File[]) {
+  for (const f of files) {
+    if (f.type.startsWith('image/')) {
+      try {
+        attachedImages.value.push(await fileToDataURL(f))
+      } catch {
+        // ignore unreadable file
+      }
+    }
+  }
+}
+
+function handlePaste(e: ClipboardEvent) {
+  const items = e.clipboardData?.items
+  if (!items) return
+  const imgs: File[] = []
+  for (const it of Array.from(items)) {
+    if (it.kind === 'file' && it.type.startsWith('image/')) {
+      const f = it.getAsFile()
+      if (f) imgs.push(f)
+    }
+  }
+  if (imgs.length) {
+    e.preventDefault()
+    addFiles(imgs)
+  }
+}
+
+function onFilePick(e: Event) {
+  const input = e.target as HTMLInputElement
+  if (input.files) addFiles(Array.from(input.files))
+  input.value = ''
+}
+
+function removeImage(i: number) {
+  attachedImages.value.splice(i, 1)
+}
+
+const canSend = computed(
+  () => !props.disabled && (message.value.trim().length > 0 || attachedImages.value.length > 0),
+)
 
 // Explicit menu state — not derived from message to avoid reactivity flicker
 const menuOpen = ref(false)
@@ -96,9 +149,10 @@ function pickItem(cmd: SlashCommand) {
 
 function send() {
   const text = message.value.trim()
-  if (!text || props.disabled) return
-  emit('send', text)
+  if ((!text && attachedImages.value.length === 0) || props.disabled) return
+  emit('send', text, attachedImages.value.slice())
   message.value = ''
+  attachedImages.value = []
   if (textareaEl.value) {
     textareaEl.value.style.height = 'auto'
   }
@@ -141,24 +195,52 @@ function handleInput() {
       </ul>
     </div>
 
-    <div class="flex gap-2 items-end p-3 bg-base-200 border-t border-base-300">
-      <textarea
-        ref="textareaEl"
-        v-model="message"
-        :placeholder="placeholder || 'Send a message... (type / for commands)'"
-        :disabled="disabled"
-        class="textarea textarea-bordered flex-1 min-h-10 max-h-48 resize-none leading-normal"
-        rows="1"
-        @keydown="handleKeydown"
-        @input="handleInput"
-      />
-      <button
-        class="btn btn-primary btn-sm"
-        :disabled="disabled || !message.trim()"
-        @click="send"
-      >
-        Send
-      </button>
+    <div class="p-3 bg-base-200 border-t border-base-300">
+      <!-- Attached image thumbnails -->
+      <div v-if="attachedImages.length" class="flex flex-wrap gap-2 mb-2">
+        <div v-for="(img, i) in attachedImages" :key="i" class="relative">
+          <img :src="img" class="w-16 h-16 object-cover rounded border border-base-300" alt="attachment" />
+          <button
+            class="absolute -top-1.5 -right-1.5 btn btn-xs btn-circle btn-error"
+            title="Remove"
+            @click="removeImage(i)"
+          >×</button>
+        </div>
+      </div>
+
+      <div class="flex gap-2 items-end">
+        <input ref="fileInputEl" type="file" accept="image/*" multiple class="hidden" @change="onFilePick" />
+        <button
+          class="btn btn-ghost btn-sm btn-square"
+          :disabled="disabled"
+          title="Attach image"
+          @click="fileInputEl?.click()"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <path d="M21 15l-5-5L5 21" />
+          </svg>
+        </button>
+        <textarea
+          ref="textareaEl"
+          v-model="message"
+          :placeholder="placeholder || 'Send a message... (type / for commands, paste an image)'"
+          :disabled="disabled"
+          class="textarea textarea-bordered flex-1 min-h-10 max-h-48 resize-none leading-normal"
+          rows="1"
+          @keydown="handleKeydown"
+          @input="handleInput"
+          @paste="handlePaste"
+        />
+        <button
+          class="btn btn-primary btn-sm"
+          :disabled="!canSend"
+          @click="send"
+        >
+          Send
+        </button>
+      </div>
     </div>
   </div>
 </template>

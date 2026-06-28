@@ -40,6 +40,18 @@ const timeStr = computed(() => {
       <time class="ml-1">{{ timeStr }}</time>
     </div>
     <div
+      v-if="message.images && message.images.length"
+      class="chat-bubble chat-bubble-primary flex flex-wrap gap-2"
+    >
+      <img
+        v-for="(img, i) in message.images"
+        :key="i"
+        :src="img"
+        class="max-h-40 rounded"
+        alt="attachment"
+      />
+    </div>
+    <div
       v-if="hasTextContent"
       class="chat-bubble chat-bubble-primary prose prose-sm prose-invert break-words"
       v-html="renderedContent"

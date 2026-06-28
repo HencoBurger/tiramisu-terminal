@@ -16,6 +16,7 @@ export interface ChatMessage {
   timestamp: number
   isStreaming: boolean
   reasoning?: string // reasoning-model "thinking" output (native runtime)
+  images?: string[] // data-URL image attachments (user messages)
 }
 
 export interface TabState {

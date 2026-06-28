@@ -44,11 +44,38 @@ type oaToolDef struct {
 }
 
 type oaChatRequest struct {
-	Model           string      `json:"model"`
-	Messages        []ChatTurn  `json:"messages"`
-	Stream          bool        `json:"stream"`
-	Tools           []oaToolDef `json:"tools,omitempty"`
-	ReasoningEffort string      `json:"reasoning_effort,omitempty"`
+	Model           string        `json:"model"`
+	Messages        []interface{} `json:"messages"`
+	Stream          bool          `json:"stream"`
+	Tools           []oaToolDef   `json:"tools,omitempty"`
+	ReasoningEffort string        `json:"reasoning_effort,omitempty"`
+}
+
+// toOAMessage converts a ChatTurn to an OpenAI message. Turns with images become
+// multimodal content (an array of text + image_url parts); everything else stays a
+// plain string-content message.
+func toOAMessage(t ChatTurn) interface{} {
+	if len(t.Images) > 0 {
+		parts := make([]interface{}, 0, len(t.Images)+1)
+		if t.Content != "" {
+			parts = append(parts, map[string]interface{}{"type": "text", "text": t.Content})
+		}
+		for _, img := range t.Images {
+			parts = append(parts, map[string]interface{}{
+				"type":      "image_url",
+				"image_url": map[string]string{"url": img},
+			})
+		}
+		return map[string]interface{}{"role": t.Role, "content": parts}
+	}
+	m := map[string]interface{}{"role": t.Role, "content": t.Content}
+	if len(t.ToolCalls) > 0 {
+		m["tool_calls"] = t.ToolCalls
+	}
+	if t.ToolCallID != "" {
+		m["tool_call_id"] = t.ToolCallID
+	}
+	return m
 }
 
 type oaChatChunk struct {
@@ -87,7 +114,11 @@ func toolDefs(tools []Tool) []oaToolDef {
 }
 
 func (c *openAICompat) StreamChat(ctx context.Context, model string, messages []ChatTurn, tools []Tool, cb StreamCallbacks) (StreamResult, error) {
-	reqBody := oaChatRequest{Model: model, Messages: messages, Stream: true}
+	msgs := make([]interface{}, len(messages))
+	for i, t := range messages {
+		msgs[i] = toOAMessage(t)
+	}
+	reqBody := oaChatRequest{Model: model, Messages: msgs, Stream: true}
 	if len(tools) > 0 {
 		reqBody.Tools = toolDefs(tools)
 	}
