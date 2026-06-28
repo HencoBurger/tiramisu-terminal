@@ -322,6 +322,9 @@ func (a *App) agentLoop(ctx context.Context, session *AgentSession, provider, mo
 		session.mu.Unlock()
 
 		if len(result.ToolCalls) == 0 {
+			if turnContent == "" && result.Finish == "length" {
+				return fmt.Errorf("the model ran out of context before replying — the input is too large for this model's context window. Raise the model's context (e.g. set OLLAMA_CONTEXT_LENGTH on the Ollama server) or send less (fewer/smaller files, drop the image).")
+			}
 			return nil
 		}
 
