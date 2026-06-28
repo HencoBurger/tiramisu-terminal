@@ -34,6 +34,10 @@ export function DeleteWindowSession(arg1) {
   return window['go']['main']['App']['DeleteWindowSession'](arg1);
 }
 
+export function GetClipboardImage() {
+  return window['go']['main']['App']['GetClipboardImage']();
+}
+
 export function GetEffectiveConfig() {
   return window['go']['main']['App']['GetEffectiveConfig']();
 }

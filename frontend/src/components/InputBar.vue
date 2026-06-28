@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
 import { slashCommands, type SlashCommand } from '../types/slashCommands'
+import { GetClipboardImage } from '../../wailsjs/go/main/App'
 
 const props = defineProps<{
   disabled?: boolean
@@ -39,19 +40,38 @@ async function addFiles(files: File[]) {
   }
 }
 
-function handlePaste(e: ClipboardEvent) {
-  const items = e.clipboardData?.items
-  if (!items) return
+async function handlePaste(e: ClipboardEvent) {
+  // 1) In-webview clipboard (works when WebKit exposes the image).
   const imgs: File[] = []
-  for (const it of Array.from(items)) {
-    if (it.kind === 'file' && it.type.startsWith('image/')) {
-      const f = it.getAsFile()
-      if (f) imgs.push(f)
+  const dt = e.clipboardData
+  if (dt) {
+    for (const it of Array.from(dt.items || [])) {
+      if (it.kind === 'file' && it.type.startsWith('image/')) {
+        const f = it.getAsFile()
+        if (f) imgs.push(f)
+      }
+    }
+    if (!imgs.length) {
+      for (const f of Array.from(dt.files || [])) {
+        if (f.type.startsWith('image/')) imgs.push(f)
+      }
     }
   }
   if (imgs.length) {
     e.preventDefault()
     addFiles(imgs)
+    return
+  }
+  // 2) Fallback: WebKitGTK often doesn't hand pasted images to JS — read the OS
+  // clipboard from the Go backend (xclip/wl-paste).
+  try {
+    const dataUrl = await GetClipboardImage()
+    if (dataUrl) {
+      e.preventDefault()
+      attachedImages.value.push(dataUrl)
+    }
+  } catch {
+    // no image on the clipboard — let normal text paste proceed
   }
 }
 

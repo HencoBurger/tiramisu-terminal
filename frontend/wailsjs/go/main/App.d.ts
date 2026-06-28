@@ -18,6 +18,8 @@ export function DeleteProviderKey(arg1:string):Promise<void>;
 
 export function DeleteWindowSession(arg1:string):Promise<void>;
 
+export function GetClipboardImage():Promise<string>;
+
 export function GetEffectiveConfig():Promise<main.EffectiveConfig>;
 
 export function GetGlobalConfig():Promise<main.GlobalConfig>;
