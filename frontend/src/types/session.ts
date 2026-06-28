@@ -131,6 +131,7 @@ export interface GlobalConfig {
   defaultModels: Record<string, string>
   disableThinking: boolean
   customInstructions: string
+  contextBudgetTokens: number
 }
 
 export interface WindowSession {

@@ -18,6 +18,7 @@ const globalConfig = ref<GlobalConfig>({
   defaultModels: {},
   disableThinking: false,
   customInstructions: '',
+  contextBudgetTokens: 6000,
 })
 
 const windowSession = ref<WindowSession | null>(null)
@@ -47,6 +48,7 @@ export function useConfig() {
         defaultModels: c.defaultModels || {},
         disableThinking: !!c.disableThinking,
         customInstructions: c.customInstructions || '',
+        contextBudgetTokens: c.contextBudgetTokens || 6000,
       }
       document.documentElement.setAttribute('data-theme', effectiveConfig.value.theme)
     } catch (e) {

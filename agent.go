@@ -229,6 +229,8 @@ func (a *App) stopAgent(session *AgentSession) {
 
 func (a *App) runAgent(ctx context.Context, session *AgentSession) {
 	defer close(session.done)
+	// Summarize older turns first if the history is over the context budget.
+	a.maybeCompact(ctx, session)
 	// Orchestrator tools = the base tools + delegate (sub-agent).
 	tools := append(defaultTools(), a.delegateTool(session))
 	err := a.agentLoop(ctx, session, session.Provider, session.Model, tools, true)

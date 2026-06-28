@@ -25,6 +25,7 @@ const hasOpenRouterKey = ref(false)
 const providerError = ref('')
 const localDisableThinking = ref(false)
 const localCustomInstructions = ref('')
+const localContextBudget = ref(6000)
 
 // Global defaults
 const localSound = ref('')
@@ -73,6 +74,7 @@ watch(() => props.open, (isOpen) => {
     localOllamaBaseURL.value = globalConfig.value.ollamaBaseURL || 'http://localhost:11434'
     localDisableThinking.value = !!globalConfig.value.disableThinking
     localCustomInstructions.value = globalConfig.value.customInstructions || ''
+    localContextBudget.value = globalConfig.value.contextBudgetTokens || 6000
     openRouterKeyInput.value = ''
     providerError.value = ''
     hasProviderKey('openrouter').then((v) => (hasOpenRouterKey.value = v)).catch(() => {})
@@ -145,6 +147,7 @@ async function save() {
     defaultModels: globalConfig.value.defaultModels,
     disableThinking: localDisableThinking.value,
     customInstructions: localCustomInstructions.value,
+    contextBudgetTokens: Number(localContextBudget.value) || 6000,
   })
 
   // Save session overrides
@@ -266,6 +269,24 @@ function close() {
         <p class="text-xs text-base-content/50 ml-9">
           Sends reasoning_effort:none — verbose reasoning models (e.g. gemma) reply directly
           instead of streaming long thoughts that can overflow the context.
+        </p>
+      </div>
+
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text">Context budget (tokens)</span>
+        </label>
+        <input
+          v-model.number="localContextBudget"
+          type="number"
+          min="1000"
+          step="1000"
+          class="input input-bordered w-40"
+        />
+        <p class="text-xs text-base-content/50 mt-1">
+          When a native conversation grows past this, older turns are auto-summarized
+          (via the worker model) to free up context. Set it to roughly 70% of your
+          model/server context (e.g. OLLAMA_CONTEXT_LENGTH).
         </p>
       </div>
 

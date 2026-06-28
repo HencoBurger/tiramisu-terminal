@@ -90,6 +90,18 @@ export function parseAgentEvent(tabId: string, ev: AgentEvent) {
       })
       break
 
+    case 'notice':
+      if (ev.text) {
+        addMessage(tabId, {
+          role: 'system',
+          content: ev.text,
+          toolUse: [],
+          timestamp: Date.now(),
+          isStreaming: false,
+        })
+      }
+      break
+
     case 'permission_request':
       usePermissions().set(tabId, {
         reqId: ev.reqId || '',

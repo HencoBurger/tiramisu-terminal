@@ -64,6 +64,8 @@ type GlobalConfig struct {
 	DisableThinking bool `json:"disableThinking"`
 	// Extra instructions appended to the native agent's system prompt (editable preprompt).
 	CustomInstructions string `json:"customInstructions"`
+	// Token budget at which the native runtime auto-summarizes older turns (0 = default).
+	ContextBudgetTokens int `json:"contextBudgetTokens"`
 }
 
 // WindowSession holds per-window state.

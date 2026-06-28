@@ -78,6 +78,7 @@ export namespace main {
 	    defaultModels: Record<string, string>;
 	    disableThinking: boolean;
 	    customInstructions: string;
+	    contextBudgetTokens: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new GlobalConfig(source);
@@ -94,6 +95,7 @@ export namespace main {
 	        this.defaultModels = source["defaultModels"];
 	        this.disableThinking = source["disableThinking"];
 	        this.customInstructions = source["customInstructions"];
+	        this.contextBudgetTokens = source["contextBudgetTokens"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
