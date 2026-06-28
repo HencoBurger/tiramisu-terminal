@@ -3,22 +3,50 @@ package main
 import (
 	"context"
 	"fmt"
+	"html"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Tool is a function the model can call. Mutating tools go through the permission
 // gate unless the permission mode auto-approves them.
 type Tool struct {
-	Name        string
-	Description string
-	Parameters  map[string]interface{} // JSON schema
-	Mutating    bool
-	Run         func(ctx context.Context, workDir string, args map[string]interface{}) (string, error)
+	Name         string
+	Description  string
+	Parameters   map[string]interface{} // JSON schema
+	Mutating     bool
+	Summarizable bool // if true, oversized output is summarized (not truncated) before returning
+	Run          func(ctx context.Context, workDir string, args map[string]interface{}) (string, error)
+}
+
+var (
+	reHTMLDrop     = regexp.MustCompile(`(?is)<(script|style|head|nav|footer|svg|noscript)\b[^>]*>.*?</\s*(script|style|head|nav|footer|svg|noscript)\s*>`)
+	reHTMLComment  = regexp.MustCompile(`(?s)<!--.*?-->`)
+	reHTMLBlockEnd = regexp.MustCompile(`(?i)</(p|div|li|h[1-6]|tr|section|article|ul|ol|table|blockquote)\s*>`)
+	reHTMLBr       = regexp.MustCompile(`(?i)<br\s*/?>`)
+	reHTMLTag      = regexp.MustCompile(`(?s)<[^>]+>`)
+	reHTMLSpaces   = regexp.MustCompile(`[ \t\f\v]+`)
+	reHTMLBlanks   = regexp.MustCompile(`\n[ \t]*\n[ \t]*(?:\n[ \t]*)+`)
+)
+
+// htmlToText strips an HTML document to readable text (drops script/style/nav/etc.).
+func htmlToText(s string) string {
+	s = reHTMLComment.ReplaceAllString(s, " ")
+	s = reHTMLDrop.ReplaceAllString(s, " ")
+	s = reHTMLBr.ReplaceAllString(s, "\n")
+	s = reHTMLBlockEnd.ReplaceAllString(s, "\n")
+	s = reHTMLTag.ReplaceAllString(s, "")
+	s = html.UnescapeString(s)
+	s = reHTMLSpaces.ReplaceAllString(s, " ")
+	s = reHTMLBlanks.ReplaceAllString(s, "\n\n")
+	return strings.TrimSpace(s)
 }
 
 func resolvePath(workDir, p string) string {
@@ -196,6 +224,55 @@ func defaultTools() []Tool {
 					return "(no output)", nil
 				}
 				return s, nil
+			},
+		},
+		{
+			Name:        "fetch_url",
+			Description: "Fetch a web page or text URL and return its readable text content (HTML is stripped to clean text). Use this instead of curl for reading websites or documentation.",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"url": map[string]interface{}{"type": "string", "description": "The http(s) URL to fetch."},
+				},
+				"required": []string{"url"},
+			},
+			Summarizable: true,
+			Run: func(ctx context.Context, workDir string, args map[string]interface{}) (string, error) {
+				url := strings.TrimSpace(argString(args, "url"))
+				if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+					return "", fmt.Errorf("url must start with http:// or https://")
+				}
+				req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+				if err != nil {
+					return "", err
+				}
+				req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Tiramisu/1.0)")
+				req.Header.Set("Accept", "text/html,application/xhtml+xml,text/plain,*/*")
+				resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+				if err != nil {
+					return "", err
+				}
+				defer resp.Body.Close()
+				body, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
+				if err != nil {
+					return "", err
+				}
+				text := string(body)
+				ct := strings.ToLower(resp.Header.Get("Content-Type"))
+				sniff := text
+				if len(sniff) > 256 {
+					sniff = sniff[:256]
+				}
+				if strings.Contains(ct, "html") || strings.Contains(strings.ToLower(sniff), "<html") || strings.Contains(strings.ToLower(sniff), "<!doctype html") {
+					text = htmlToText(text)
+				}
+				if strings.TrimSpace(text) == "" {
+					return "(empty page)", nil
+				}
+				if resp.StatusCode >= 400 {
+					return fmt.Sprintf("HTTP %d\n%s", resp.StatusCode, text), nil
+				}
+				return text, nil
 			},
 		},
 	}

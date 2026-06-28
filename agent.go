@@ -19,7 +19,7 @@ import (
 
 const agentSystemPrompt = `You are a capable coding assistant integrated into the Tiramisu desktop app, working inside the user's project directory.
 
-You have tools: read_file, list_directory, write_file, bash, and delegate.
+You have tools: read_file, list_directory, write_file, bash, fetch_url, and delegate.
 
 Read before you act — this is mandatory:
 - You do NOT know any file's contents until you have read it with read_file in THIS conversation. Never assume, recall, or invent what a file contains.
@@ -33,11 +33,13 @@ When changing code:
 - Prefer editing only the specific lines that need to change.
 - write_file targets ONE file: its path must include the filename (e.g. src/app.go), never a directory. To create a file in a folder, append the filename to the folder path.
 
-For well-scoped sub-tasks prefer delegate, which runs a worker agent and returns its result, keeping your own context lean.
+Reading web content:
+- To read a website or online docs, use fetch_url (it returns clean text), NOT curl/wget in bash (which dump raw HTML and overflow the context).
+- For any large read or open-ended research (a whole site, scanning many files), prefer delegate: it runs a worker agent that does the bulk reading in its own context and returns only the distilled findings, keeping your context lean. Don't pull large content into your own context just to skim it.
 
 Answer in clear Markdown with fenced code blocks. When the task is complete, give a short summary of what you changed.`
 
-const subAgentSystemPrompt = `You are a focused worker agent. Complete the single task you are given using read_file, list_directory, write_file, and bash.
+const subAgentSystemPrompt = `You are a focused worker agent. Complete the single task you are given using read_file, list_directory, write_file, bash, and fetch_url (use fetch_url to read websites/docs, never curl).
 
 Read before you act: you do not know a file's contents until you read_file it this session — never assume or invent them. Read every file you will change or describe BEFORE doing so. Make the smallest necessary change and never make destructive changes (no deleting files/large blocks or destructive shell commands). Reply with a concise result. Do not ask questions — work autonomously and finish.`
 
@@ -401,6 +403,11 @@ func (a *App) executeTool(ctx context.Context, session *AgentSession, tools []To
 	default:
 		result = out
 	}
+	// Oversized output: summarizable tools (e.g. fetch_url) get distilled by the worker
+	// model so the gist survives; everything else is truncated head+tail.
+	if len(result) > a.maxToolOutputChars() && tool.Summarizable {
+		return a.summarizeToolOutput(ctx, session, tool.Name, result)
+	}
 	return capToolOutput(result, a.maxToolOutputChars())
 }
 
@@ -409,6 +416,32 @@ func (a *App) maxToolOutputChars() int {
 		return a.globalConfig.MaxToolOutputChars
 	}
 	return defaultMaxToolOutputChars
+}
+
+// summarizeToolOutput condenses a large tool result via the worker model so it fits the
+// context window, keeping concrete facts and dropping boilerplate. Falls back to a plain
+// truncation if the summarizer is unavailable or returns nothing.
+func (a *App) summarizeToolOutput(ctx context.Context, session *AgentSession, toolName, content string) string {
+	prov, err := a.providerFor(session.Provider)
+	if err != nil {
+		return capToolOutput(content, a.maxToolOutputChars())
+	}
+	model := session.WorkerModel
+	if model == "" {
+		model = session.Model
+	}
+	// Bound the summarizer's own input so it can't overflow the worker's context either.
+	input := clip(content, a.maxToolOutputChars()*6)
+	prompt := fmt.Sprintf("The %s tool returned the content below. Extract the information relevant to the current task as concise notes in Markdown, preserving concrete details (names, URLs, API endpoints, parameters, code, values) and dropping navigation/boilerplate/markup. Do not add commentary.\n\nCONTENT:\n%s", toolName, input)
+	res, serr := prov.StreamChat(ctx, model, []ChatTurn{{Role: "user", Content: prompt}}, nil, StreamCallbacks{})
+	summary := strings.TrimSpace(res.Content)
+	if summary == "" {
+		summary = strings.TrimSpace(res.Reasoning)
+	}
+	if serr != nil || summary == "" {
+		return capToolOutput(content, a.maxToolOutputChars())
+	}
+	return fmt.Sprintf("[%s output was large — summarized to fit the context window]\n\n%s", toolName, summary)
 }
 
 // delegateTool lets the orchestrator hand a self-contained sub-task to a worker agent
