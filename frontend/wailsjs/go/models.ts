@@ -79,6 +79,7 @@ export namespace main {
 	    disableThinking: boolean;
 	    customInstructions: string;
 	    contextBudgetTokens: number;
+	    maxToolOutputChars: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new GlobalConfig(source);
@@ -96,6 +97,7 @@ export namespace main {
 	        this.disableThinking = source["disableThinking"];
 	        this.customInstructions = source["customInstructions"];
 	        this.contextBudgetTokens = source["contextBudgetTokens"];
+	        this.maxToolOutputChars = source["maxToolOutputChars"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

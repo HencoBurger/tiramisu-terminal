@@ -38,6 +38,22 @@ func argString(args map[string]interface{}, key string) string {
 	return ""
 }
 
+const defaultMaxToolOutputChars = 8000
+
+// capToolOutput truncates an oversized tool result (e.g. a curl/cat of a large page)
+// before it enters the conversation, keeping the head and tail with a marker — so one
+// tool call can't blow the context window.
+func capToolOutput(s string, max int) string {
+	if max <= 0 || len(s) <= max {
+		return s
+	}
+	head := max * 2 / 3
+	tail := max - head
+	return s[:head] +
+		fmt.Sprintf("\n\n…[truncated %d characters — tool output too large for the context window; read a specific file/section or use a narrower command]…\n\n", len(s)-max) +
+		s[len(s)-tail:]
+}
+
 func isRegularFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular()

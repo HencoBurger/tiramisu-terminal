@@ -390,16 +390,25 @@ func (a *App) executeTool(ctx context.Context, session *AgentSession, tools []To
 		session.markRead(resolvePath(session.WorkDir, argString(args, "path")))
 	}
 
-	if err != nil {
-		if out != "" {
-			return out + "\nError: " + err.Error()
-		}
-		return "Error: " + err.Error()
+	var result string
+	switch {
+	case err != nil && out != "":
+		result = out + "\nError: " + err.Error()
+	case err != nil:
+		result = "Error: " + err.Error()
+	case out == "":
+		result = "(no output)"
+	default:
+		result = out
 	}
-	if out == "" {
-		return "(no output)"
+	return capToolOutput(result, a.maxToolOutputChars())
+}
+
+func (a *App) maxToolOutputChars() int {
+	if a.globalConfig.MaxToolOutputChars > 0 {
+		return a.globalConfig.MaxToolOutputChars
 	}
-	return out
+	return defaultMaxToolOutputChars
 }
 
 // delegateTool lets the orchestrator hand a self-contained sub-task to a worker agent

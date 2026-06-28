@@ -66,6 +66,9 @@ type GlobalConfig struct {
 	CustomInstructions string `json:"customInstructions"`
 	// Token budget at which the native runtime auto-summarizes older turns (0 = default).
 	ContextBudgetTokens int `json:"contextBudgetTokens"`
+	// Max characters of a single tool result kept in context (0 = default). Large
+	// outputs (e.g. curl of a web page) are truncated so they can't blow the context.
+	MaxToolOutputChars int `json:"maxToolOutputChars"`
 }
 
 // WindowSession holds per-window state.

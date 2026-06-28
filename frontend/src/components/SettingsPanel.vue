@@ -26,6 +26,7 @@ const providerError = ref('')
 const localDisableThinking = ref(false)
 const localCustomInstructions = ref('')
 const localContextBudget = ref(6000)
+const localMaxToolOutput = ref(8000)
 
 // Global defaults
 const localSound = ref('')
@@ -75,6 +76,7 @@ watch(() => props.open, (isOpen) => {
     localDisableThinking.value = !!globalConfig.value.disableThinking
     localCustomInstructions.value = globalConfig.value.customInstructions || ''
     localContextBudget.value = globalConfig.value.contextBudgetTokens || 6000
+    localMaxToolOutput.value = globalConfig.value.maxToolOutputChars || 8000
     openRouterKeyInput.value = ''
     providerError.value = ''
     hasProviderKey('openrouter').then((v) => (hasOpenRouterKey.value = v)).catch(() => {})
@@ -148,6 +150,7 @@ async function save() {
     disableThinking: localDisableThinking.value,
     customInstructions: localCustomInstructions.value,
     contextBudgetTokens: Number(localContextBudget.value) || 6000,
+    maxToolOutputChars: Number(localMaxToolOutput.value) || 8000,
   })
 
   // Save session overrides
@@ -288,6 +291,23 @@ function close() {
           When a native conversation grows past this, older turns are auto-summarized
           (via the worker model) to free up context. Set it to roughly 70% of your
           model/server context (e.g. OLLAMA_CONTEXT_LENGTH).
+        </p>
+      </div>
+
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text">Max tool output (chars)</span>
+        </label>
+        <input
+          v-model.number="localMaxToolOutput"
+          type="number"
+          min="500"
+          step="1000"
+          class="input input-bordered w-40"
+        />
+        <p class="text-xs text-base-content/50 mt-1">
+          A single tool result (e.g. curl of a web page, cat of a big file) is truncated
+          to this many characters so one call can't overflow the context window.
         </p>
       </div>
 

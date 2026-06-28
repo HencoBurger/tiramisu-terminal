@@ -132,6 +132,7 @@ export interface GlobalConfig {
   disableThinking: boolean
   customInstructions: string
   contextBudgetTokens: number
+  maxToolOutputChars: number
 }
 
 export interface WindowSession {
